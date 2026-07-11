@@ -1,5 +1,5 @@
 -- =====================================================================
--- Invoice UAE — Consolidated schema (all migrations 0001–0013)
+-- Invoice UAE — Consolidated schema (all migrations 0001–0014)
 -- One-shot install: paste into the Supabase SQL Editor and Run.
 -- Generated from db/migrations/*.sql; edit those, not this file.
 -- =====================================================================
@@ -1737,4 +1737,20 @@ create index if not exists idx_user_permission_override_permission_id on public.
 create index if not exists idx_user_role_role_id on public.user_role(role_id);
 create index if not exists idx_vendor_created_by on public.vendor(created_by);
 create index if not exists idx_vendor_default_tax_id on public.vendor(default_tax_id);
+
+
+-- ## SOURCE: db/migrations/0014_sequence_edit_policy.sql
+
+-- =====================================================================
+-- 0014 · Allow admins to edit document numbering
+--
+-- document_sequence had only a SELECT policy, so the Settings UI could show
+-- the sequences but not save changes. Add an UPDATE policy gated by the
+-- admin.sequence.edit permission.
+-- =====================================================================
+
+drop policy if exists admin_write_sequence on public.document_sequence;
+create policy admin_write_sequence on public.document_sequence for update to authenticated
+  using (public.has_permission('admin.sequence.edit'))
+  with check (public.has_permission('admin.sequence.edit'));
 

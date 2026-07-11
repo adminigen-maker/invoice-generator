@@ -1,11 +1,17 @@
 import { createClient } from "@/lib/db/supabase-server";
+import { can } from "@/lib/rbac/can";
+import { P } from "@/lib/rbac/permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SequencesEditor } from "./sequences-editor";
+
+export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const [{ data: company }, { data: sequences }] = await Promise.all([
+  const [{ data: company }, { data: sequences }, canEditSequences] = await Promise.all([
     supabase.from("company").select("*").maybeSingle(),
     supabase.from("document_sequence").select("*").order("code"),
+    can(P.admin.sequenceEdit),
   ]);
 
   return (
@@ -28,27 +34,7 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Document numbering</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground">
-              <tr><th className="py-1">Sequence</th><th>Format</th><th className="text-right">Next</th></tr>
-            </thead>
-            <tbody>
-              {(sequences ?? []).map((s) => (
-                <tr key={s.id} className="border-t">
-                  <td className="py-1.5 font-mono text-xs">{s.code}</td>
-                  <td className="font-mono text-xs">{s.format}</td>
-                  <td className="text-right font-mono">{s.next_number}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <SequencesEditor sequences={sequences ?? []} canEdit={canEditSequences} />
     </div>
   );
 }
