@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { NavList } from "./nav-config";
+import { SidebarContent } from "./nav-config";
 
 /** Hamburger + slide-in drawer shown only below the md breakpoint. */
 export function MobileNav({ permissions }: { permissions: string[] }) {
@@ -50,9 +50,7 @@ export function MobileNav({ permissions }: { permissions: string[] }) {
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            <nav className="flex-1 overflow-y-auto p-3">
-              <NavList permissions={permissions} onNavigate={() => setOpen(false)} />
-            </nav>
+            <SidebarContent permissions={permissions} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       )}

@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   return (
-    <div className="min-h-screen flex">
+    <div className="flex h-dvh overflow-hidden">
       <Sidebar permissions={Array.from(perms)} />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar

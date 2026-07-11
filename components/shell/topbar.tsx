@@ -13,7 +13,7 @@ export function Topbar({
   permissions: string[];
 }) {
   return (
-    <header className="h-14 border-b bg-background flex items-center px-3 sm:px-6 justify-between gap-2">
+    <header className="h-14 shrink-0 border-b bg-background flex items-center px-3 sm:px-6 justify-between gap-2">
       <div className="flex items-center gap-1 min-w-0">
         <MobileNav permissions={permissions} />
         <div className="text-sm text-muted-foreground truncate">
