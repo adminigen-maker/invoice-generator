@@ -17,6 +17,8 @@ import {
   LayoutGrid,
   Database,
   Cog,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { P } from "@/lib/rbac/permissions";
@@ -83,7 +85,9 @@ export function SidebarContent({
   // Active area follows the current route, but the switcher can override it
   // until the next navigation.
   const [area, setArea] = useState<AreaKey>(() => areaForPath(pathname));
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setArea(areaForPath(pathname)), [pathname]);
+  useEffect(() => setMenuOpen(false), [pathname]);
 
   const availableAreas = AREAS.filter((a) => visible.some((n) => n.area === a.key));
   const activeArea = availableAreas.some((a) => a.key === area)
@@ -132,34 +136,54 @@ export function SidebarContent({
         ))}
       </nav>
 
-      {availableAreas.length > 1 && (
-        <div
-          className="shrink-0 border-t p-2 grid gap-1"
-          style={{ gridTemplateColumns: `repeat(${availableAreas.length}, minmax(0, 1fr))` }}
-        >
-          {availableAreas.map((a) => {
-            const Icon = a.icon;
-            const isActive = a.key === activeArea;
-            return (
-              <button
-                key={a.key}
-                type="button"
-                onClick={() => setArea(a.key)}
-                aria-pressed={isActive}
-                className={cn(
-                  "flex flex-col items-center gap-1 rounded-md py-2 text-[11px] font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {a.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {availableAreas.length > 1 && (() => {
+        const active = availableAreas.find((a) => a.key === activeArea) ?? availableAreas[0];
+        return (
+          <div className="relative shrink-0 border-t p-2">
+            {/* "Change area" popup (opens upward, Dynamics-style) */}
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                <div className="absolute bottom-full left-2 right-2 mb-1 z-20 rounded-md border bg-popover text-popover-foreground shadow-lg py-1">
+                  <div className="px-3 py-1.5 text-sm font-semibold">Change area</div>
+                  {availableAreas.map((a) => {
+                    const isActive = a.key === activeArea;
+                    return (
+                      <button
+                        key={a.key}
+                        type="button"
+                        onClick={() => {
+                          setArea(a.key);
+                          setMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+                      >
+                        <Check className={cn("h-4 w-4 shrink-0", isActive ? "opacity-100" : "opacity-0")} />
+                        <span className={cn("flex-1 text-left", isActive && "font-medium")}>{a.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Current-area button */}
+            <button
+              type="button"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="w-full flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-accent transition-colors"
+            >
+              <span className="h-7 w-7 rounded bg-primary text-primary-foreground grid place-items-center text-xs font-bold shrink-0">
+                {active.label.charAt(0)}
+              </span>
+              <span className="flex-1 text-left text-sm font-semibold truncate">{active.label}</span>
+              <ChevronsUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

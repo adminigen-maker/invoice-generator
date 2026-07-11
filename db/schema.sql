@@ -1,13 +1,11 @@
 -- =====================================================================
--- Invoice UAE — Consolidated schema (all migrations 0001–0011)
+-- Invoice UAE — Consolidated schema (all migrations 0001–0012)
 -- One-shot install: paste into the Supabase SQL Editor and Run.
 -- Generated from db/migrations/*.sql; edit those, not this file.
 -- =====================================================================
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0001_extensions_and_types.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0001 · Extensions & shared enum types
@@ -56,9 +54,7 @@ end;
 $$ language plpgsql;
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0002_rbac.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0002 · Role-Based Access Control
@@ -154,9 +150,7 @@ create index on audit_log (table_name, record_id);
 create index on audit_log (user_id, created_at desc);
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0003_master_data.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0003 · Master data — company, tax, sequences, products, partners, warehouses
@@ -342,9 +336,7 @@ create table location (
 );
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0004_sales_flow.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0004 · Sales flow — Quotation → Sales Order → Delivery Note
@@ -474,9 +466,7 @@ create index on delivery_note_line (delivery_note_id);
 create index on delivery_note_line (sales_order_line_id);
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0005_invoicing_and_payments.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0005 · Invoicing & Payments
@@ -699,9 +689,7 @@ create trigger payment_allocation_rollup
   for each row execute function trg_payment_allocation_rollup();
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0006_inventory.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0006 · Inventory — append-only stock moves + on-hand view
@@ -813,9 +801,7 @@ create trigger delivery_note_post_moves
   for each row execute function post_delivery_note_moves();
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0007_rls_policies.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0007 · Row-Level Security policies
@@ -1127,9 +1113,7 @@ create policy admin_field_perm on field_permission for all to authenticated
   with check (has_permission('admin.roles.edit'));
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0008_seed_rbac_and_defaults.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0008 · Seed data — default roles, permissions, tax, UoM, sequences
@@ -1370,9 +1354,7 @@ end;
 $$ language plpgsql;
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0009_security_hardening.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0009 · Security hardening (addresses Supabase advisor findings)
@@ -1516,9 +1498,7 @@ create policy audit_insert on public.audit_log for insert to authenticated
   with check (auth.uid() is not null);
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0010_perf_rpcs.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0010 · Performance RPCs
@@ -1576,9 +1556,7 @@ $$;
 grant execute on function public.dashboard_totals() to authenticated;
 
 
--- #####################################################################
 -- ## SOURCE: db/migrations/0011_dashboard_charts.sql
--- #####################################################################
 
 -- =====================================================================
 -- 0011 · Dashboard chart aggregates
@@ -1634,4 +1612,56 @@ as $$
   limit greatest(lim, 1);
 $$;
 grant execute on function public.top_customers(int) to authenticated;
+
+
+-- ## SOURCE: db/migrations/0012_auto_provision_users.sql
+
+-- =====================================================================
+-- 0012 · Auto-provision app_user rows
+--
+-- So the Admin → Roles & Users screen can see and assign roles to every
+-- authenticated user, create an app_user row automatically whenever someone
+-- signs up, and backfill anyone who already exists in auth.users.
+-- =====================================================================
+
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.app_user (id, email, display_name, is_active)
+  values (
+    new.id,
+    coalesce(new.email, ''),
+    coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', new.email, 'User'),
+    true
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_auth_user();
+
+-- Backfill existing auth users that don't yet have a profile row.
+insert into public.app_user (id, email, display_name, is_active)
+select
+  u.id,
+  coalesce(u.email, ''),
+  coalesce(u.raw_user_meta_data ->> 'full_name', u.raw_user_meta_data ->> 'name', u.email, 'User'),
+  true
+from auth.users u
+on conflict (id) do nothing;
+
+-- user_role had insert + delete policies but no UPDATE policy; the admin needs
+-- it to change a user's data scope (and for upsert-on-conflict to work).
+drop policy if exists admin_update_user_roles on public.user_role;
+create policy admin_update_user_roles on public.user_role for update to authenticated
+  using (public.has_permission('admin.users.edit'))
+  with check (public.has_permission('admin.users.edit'));
 
