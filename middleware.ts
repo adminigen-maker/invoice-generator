@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { cleanEnv } from "@/lib/db/clean-env";
 
 /**
  * Refresh the Supabase session cookie on every request and gate app routes
@@ -9,8 +10,8 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim(),
-    (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim(),
+    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
