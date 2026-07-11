@@ -12,7 +12,7 @@ export default async function RolesPage() {
   const supabase = await createClient();
   const [{ data: roles }, { data: perms }, { data: rolePerms }, { data: users }, canEditRoles, canEditUsers] =
     await Promise.all([
-      supabase.from("role").select("id, code, name").order("code"),
+      supabase.from("role").select("id, code, name, is_system").order("code"),
       supabase.from("app_permission").select("id, code, module, action, description").order("module").order("code"),
       supabase.from("role_permission").select("role_id, permission_id"),
       supabase
