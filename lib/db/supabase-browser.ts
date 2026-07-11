@@ -1,15 +1,12 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { cleanEnv } from "./clean-env";
+import { supabaseUrl, supabaseAnonKey } from "./config";
 
 /**
  * Browser-side Supabase client. RLS applies. Never trust output as authoritative
  * for mutations — always mirror the check in a server action.
  */
 export function createClient() {
-  // cleanEnv() strips invisible characters a copy-pasted env var may carry,
-  // which otherwise make the auth headers non-Latin-1 and crash fetch().
-  return createBrowserClient(
-    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
-    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-  );
+  // URL + anon key are resolved via config.ts, which sanitizes the env value
+  // and falls back to the known-correct public value if it is corrupt/unset.
+  return createBrowserClient(supabaseUrl(), supabaseAnonKey());
 }
