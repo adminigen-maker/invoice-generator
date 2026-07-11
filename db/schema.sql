@@ -1,5 +1,5 @@
 -- =====================================================================
--- Invoice UAE — Consolidated schema (all migrations 0001–0015)
+-- Invoice UAE — Consolidated schema (all migrations 0001–0016)
 -- One-shot install: paste into the Supabase SQL Editor and Run.
 -- Generated from db/migrations/*.sql; edit those, not this file.
 -- =====================================================================
@@ -1762,4 +1762,18 @@ create policy admin_write_sequence on public.document_sequence for update to aut
 -- =====================================================================
 alter table public.company add column if not exists bank_account text;
 alter table public.company add column if not exists whatsapp text;
+
+
+-- ## SOURCE: db/migrations/0016_company_edit_policy.sql
+
+-- =====================================================================
+-- 0016 · Allow admins to edit the company profile
+--
+-- company had only a SELECT policy; add an UPDATE policy gated by the
+-- admin.company.edit permission so the Settings screen can save changes.
+-- =====================================================================
+drop policy if exists admin_write_company on public.company;
+create policy admin_write_company on public.company for update to authenticated
+  using (public.has_permission('admin.company.edit'))
+  with check (public.has_permission('admin.company.edit'));
 
