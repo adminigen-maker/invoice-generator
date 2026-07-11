@@ -70,7 +70,7 @@ export function FormPageSkeleton({ fields = 8 }: { fields?: number }) {
   );
 }
 
-/** Dashboard skeleton: 4 stat cards + a content card. */
+/** Dashboard skeleton: 4 stat cards + chart cards. */
 export function DashboardSkeleton() {
   return (
     <div className="space-y-6">
@@ -78,20 +78,27 @@ export function DashboardSkeleton() {
         <Skeleton className="h-7 w-40" />
         <Skeleton className="h-4 w-64" />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="p-6 space-y-3">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-20" />
+          <Card key={i} className="p-4 flex items-center gap-3">
+            <Skeleton className="h-10 w-10 rounded-lg" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-5 w-16" />
+            </div>
           </Card>
         ))}
       </div>
-      <Card className="p-6 space-y-3">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-4 w-full max-w-lg" />
-        <Skeleton className="h-4 w-full max-w-md" />
-        <Skeleton className="h-4 w-full max-w-sm" />
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 p-6 space-y-3">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-[220px] w-full" />
+        </Card>
+        <Card className="p-6 space-y-3">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-[200px] w-full rounded-full max-w-[200px] mx-auto" />
+        </Card>
+      </div>
     </div>
   );
 }

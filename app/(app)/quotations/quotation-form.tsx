@@ -211,8 +211,8 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
         </div>
       </div>
 
-      <div className="rounded-lg border overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-lg border overflow-x-auto">
+        <table className="w-full text-sm min-w-[760px]">
           <thead className="bg-muted/50">
             <tr className="text-left">
               <th className="p-2 w-[26%]">Product</th>
