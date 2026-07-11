@@ -1,0 +1,59 @@
+/**
+ * Central permission-code catalog. Import these constants instead of
+ * hardcoding strings so refactors are grep-safe.
+ * Keep in sync with db/migrations/0008_seed_rbac_and_defaults.sql.
+ */
+export const P = {
+  admin: {
+    usersView: "admin.users.view",
+    usersEdit: "admin.users.edit",
+    rolesView: "admin.roles.view",
+    rolesEdit: "admin.roles.edit",
+    auditView: "admin.audit.view",
+    companyEdit: "admin.company.edit",
+    sequenceEdit: "admin.sequence.edit",
+    taxEdit: "admin.tax.edit",
+  },
+  sales: {
+    customerView: "sales.customer.view",
+    customerCreate: "sales.customer.create",
+    customerEdit: "sales.customer.edit",
+    customerDelete: "sales.customer.delete",
+    quotationView: "sales.quotation.view",
+    quotationViewCost: "sales.quotation.view_cost",
+    quotationCreate: "sales.quotation.create",
+    quotationEdit: "sales.quotation.edit",
+    quotationDelete: "sales.quotation.delete",
+    quotationConfirm: "sales.quotation.confirm",
+    orderView: "sales.order.view",
+    orderCreate: "sales.order.create",
+    orderEdit: "sales.order.edit",
+    orderCancel: "sales.order.cancel",
+  },
+  inventory: {
+    productView: "inventory.product.view",
+    productCreate: "inventory.product.create",
+    productEdit: "inventory.product.edit",
+    productDelete: "inventory.product.delete",
+    productViewCost: "inventory.product.view_cost",
+    stockView: "inventory.stock.view",
+    stockAdjust: "inventory.stock.adjust",
+    deliveryView: "inventory.delivery.view",
+    deliveryCreate: "inventory.delivery.create",
+    deliveryEdit: "inventory.delivery.edit",
+    deliveryPost: "inventory.delivery.post",
+    receiptCreate: "inventory.receipt.create",
+  },
+  invoice: {
+    view: "invoice.view",
+    create: "invoice.create",
+    edit: "invoice.edit",
+    post: "invoice.post",
+    void: "invoice.void",
+    creditNoteView: "invoice.credit_note.view",
+    creditNoteCreate: "invoice.credit_note.create",
+    paymentView: "invoice.payment.view",
+    paymentCreate: "invoice.payment.create",
+    paymentEdit: "invoice.payment.edit",
+  },
+} as const;

@@ -1,0 +1,65 @@
+import Link from "next/link";
+import { createClient } from "@/lib/db/supabase-server";
+import { formatDate, formatMoney } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { StatusBadge } from "@/components/status-badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+export const dynamic = "force-dynamic";
+
+export default async function InvoicesPage() {
+  const supabase = await createClient();
+  const { data: rows } = await supabase
+    .from("invoice")
+    .select("id, number, invoice_date, due_date, status, total, amount_paid, balance, currency, customer:customer(name)")
+    .order("invoice_date", { ascending: false })
+    .limit(200);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Invoices</h1>
+        <p className="text-sm text-muted-foreground">
+          Bills issued to customers. Post to lock; then record payments.
+        </p>
+      </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Number</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Due</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Total</TableHead>
+              <TableHead className="text-right">Balance</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(rows ?? []).length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  No invoices yet.
+                </TableCell>
+              </TableRow>
+            )}
+            {(rows ?? []).map((r) => (
+              <TableRow key={r.id}>
+                <TableCell className="font-mono text-xs">
+                  <Link href={`/invoices/${r.id}`} className="hover:underline">{r.number}</Link>
+                </TableCell>
+                <TableCell className="font-medium">{(r.customer as { name?: string } | null)?.name ?? "—"}</TableCell>
+                <TableCell>{formatDate(r.invoice_date)}</TableCell>
+                <TableCell>{formatDate(r.due_date)}</TableCell>
+                <TableCell><StatusBadge status={r.status} /></TableCell>
+                <TableCell className="text-right font-mono">{formatMoney(r.total, r.currency)}</TableCell>
+                <TableCell className="text-right font-mono">{formatMoney(r.balance, r.currency)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
+  );
+}
