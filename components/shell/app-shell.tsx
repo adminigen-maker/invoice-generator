@@ -2,14 +2,29 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { SidebarContent } from "./nav-config";
 import { MobileNav } from "./mobile-nav";
 import { SignOutButton } from "./sign-out-button";
 
 const KEY = "invoice-uae:sidebar-collapsed";
+
+// Read-only dashboard + list views that should stay live. Forms / detail / edit
+// pages are excluded so a refresh never disrupts someone mid-edit.
+const LIVE_ROUTES = new Set([
+  "/",
+  "/products",
+  "/customers",
+  "/quotations",
+  "/sales-orders",
+  "/delivery-notes",
+  "/invoices",
+  "/payments",
+]);
 
 export function AppShell({
   permissions,
@@ -22,6 +37,7 @@ export function AppShell({
   userEmail: string;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   // Default open; remember the user's choice across sessions.
   const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -92,7 +108,10 @@ export function AppShell({
           </div>
           <SignOutButton />
         </header>
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-muted/20">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-muted/20">
+          {LIVE_ROUTES.has(pathname) && <AutoRefresh intervalMs={30000} />}
+          {children}
+        </main>
       </div>
     </div>
   );

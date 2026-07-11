@@ -35,6 +35,7 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
+    pathname.startsWith("/api") || // API routes handle their own auth (e.g. cron keep-alive)
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico";
 
