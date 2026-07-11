@@ -20,13 +20,19 @@ const FALLBACK_SUPABASE_ANON_KEY =
 
 export function supabaseUrl(): string {
   const v = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  return /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(v) ? v : FALLBACK_SUPABASE_URL;
+  // Must be a complete Supabase project URL. A tab/whitespace-mangled value
+  // fails this (after cleanEnv strips the junk it still has to match exactly).
+  return /^https:\/\/[a-z0-9]{16,}\.supabase\.co$/.test(v) ? v : FALLBACK_SUPABASE_URL;
 }
 
 export function supabaseAnonKey(): string {
   const v = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  // A usable key is either a Supabase JWT (eyJ…, ~200+ chars) or a modern
-  // publishable key (sb_publishable_…). Anything shorter is corruption.
-  const looksValid = (v.startsWith("eyJ") && v.length >= 100) || v.startsWith("sb_publishable_");
-  return looksValid ? v : FALLBACK_SUPABASE_ANON_KEY;
+  // Accept an env key ONLY if it is *structurally complete*:
+  //   - a JWT: three base64url segments (≥20 chars each) split by dots, OR
+  //   - a modern publishable key (sb_publishable_…).
+  // A key that lost characters to paste corruption cannot satisfy this, so it
+  // deterministically falls back to the known-good public key below.
+  const isCompleteJwt = /^[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}$/.test(v);
+  const isPublishable = /^sb_publishable_[A-Za-z0-9_-]{20,}$/.test(v);
+  return isCompleteJwt || isPublishable ? v : FALLBACK_SUPABASE_ANON_KEY;
 }
