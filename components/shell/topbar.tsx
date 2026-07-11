@@ -1,7 +1,6 @@
-// Mostly a server component; the mobile hamburger inside is its own client island.
-import { LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
+// Mostly a server component; the mobile hamburger and sign-out are client islands.
 import { MobileNav } from "./mobile-nav";
+import { SignOutButton } from "./sign-out-button";
 
 export function Topbar({
   userEmail,
@@ -23,12 +22,7 @@ export function Topbar({
           <span className="hidden lg:inline">{userEmail}</span>
         </div>
       </div>
-      <form action="/auth/signout" method="POST">
-        <Button type="submit" variant="ghost" size="sm">
-          <LogOut className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Sign out</span>
-        </Button>
-      </form>
+      <SignOutButton />
     </header>
   );
 }
