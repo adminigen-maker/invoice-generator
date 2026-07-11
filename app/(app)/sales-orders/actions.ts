@@ -6,6 +6,15 @@ import { createClient } from "@/lib/db/supabase-server";
 import { requirePermission } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 import { computeLine } from "@/lib/pricing";
+import { cancelDocument, deleteDocument } from "@/lib/db/doc-lifecycle";
+
+export async function cancelSalesOrder(id: string) {
+  return cancelDocument("sales_order", P.sales.orderEdit, "/sales-orders", id);
+}
+
+export async function deleteSalesOrder(id: string) {
+  return deleteDocument("sales_order", P.sales.orderDelete, "/sales-orders", id);
+}
 
 async function nextNumber(code: string) {
   const supabase = await createClient();

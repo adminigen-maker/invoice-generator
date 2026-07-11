@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 import { computeLine, computeTotals } from "@/lib/pricing";
 import { quotationApprovalRules } from "@/lib/workflows/approvals";
+import { cancelDocument, deleteDocument } from "@/lib/db/doc-lifecycle";
 
 const lineSchema = z.object({
   product_id: z.string().uuid().optional().nullable(),
@@ -244,10 +245,10 @@ export async function confirmQuotation(id: string): Promise<ActionResult> {
   }
 }
 
+export async function cancelQuotation(id: string) {
+  return cancelDocument("quotation", P.sales.quotationEdit, "/quotations", id);
+}
+
 export async function deleteQuotation(id: string) {
-  await requirePermission(P.sales.quotationDelete);
-  const supabase = await createClient();
-  await supabase.from("quotation").delete().eq("id", id);
-  revalidatePath("/quotations");
-  redirect("/quotations");
+  return deleteDocument("quotation", P.sales.quotationDelete, "/quotations", id);
 }

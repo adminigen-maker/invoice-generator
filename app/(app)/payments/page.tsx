@@ -1,9 +1,13 @@
 import { createClient } from "@/lib/db/supabase-server";
+import { getPermissions } from "@/lib/rbac/can";
+import { P } from "@/lib/rbac/permissions";
 import { formatDate, formatMoney } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ListToolbar } from "@/components/list-toolbar";
+import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
+import { deletePayment } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +18,7 @@ export default async function PaymentsPage({
 }) {
   const { q } = await searchParams;
   const supabase = await createClient();
+  const perms = await getPermissions();
 
   let query = supabase
     .from("payment")
@@ -25,6 +30,8 @@ export default async function PaymentsPage({
   if (term) query = query.or(`number.ilike.${term},reference.ilike.${term}`);
 
   const { data: rows } = await query;
+
+  const canDelete = perms.has(P.invoice.paymentDelete);
 
   return (
     <div className="space-y-4">
@@ -46,12 +53,13 @@ export default async function PaymentsPage({
               <TableHead>Reference</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-right">Unallocated</TableHead>
+              {canDelete && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canDelete ? 8 : 7} className="text-center text-muted-foreground py-8">
                   {q ? `No payments match “${q}”.` : "No payments here."}
                 </TableCell>
               </TableRow>
@@ -65,6 +73,17 @@ export default async function PaymentsPage({
                 <TableCell className="text-muted-foreground">{r.reference ?? "—"}</TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(r.amount, r.currency)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">{formatMoney(r.amount_unallocated, r.currency)}</TableCell>
+                {canDelete && (
+                  <TableCell>
+                    <DocRowActions
+                      id={r.id}
+                      entityLabel="payment"
+                      showCancel={false}
+                      showDelete={canDelete}
+                      remove={deletePayment}
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

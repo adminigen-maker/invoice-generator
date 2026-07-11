@@ -4,6 +4,15 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/db/supabase-server";
 import { requirePermission } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
+import { cancelDocument, deleteDocument } from "@/lib/db/doc-lifecycle";
+
+export async function cancelDeliveryNote(id: string) {
+  return cancelDocument("delivery_note", P.inventory.deliveryEdit, "/delivery-notes", id);
+}
+
+export async function deleteDeliveryNote(id: string) {
+  return deleteDocument("delivery_note", P.inventory.deliveryDelete, "/delivery-notes", id);
+}
 
 /**
  * Post a delivery note: sets posted_at → the DB trigger creates the stock moves

@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { createClient } from "@/lib/db/supabase-server";
+import { getPermissions } from "@/lib/rbac/can";
+import { P } from "@/lib/rbac/permissions";
 import { formatDate, formatMoney } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ListToolbar } from "@/components/list-toolbar";
+import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
+import { canCancelDoc, canDeleteDoc } from "@/lib/doc-status";
+import { cancelInvoice, deleteInvoice } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +23,7 @@ export default async function InvoicesPage({
 }) {
   const { q, view = "active" } = await searchParams;
   const supabase = await createClient();
+  const perms = await getPermissions();
 
   let query = supabase
     .from("invoice")
@@ -32,6 +38,10 @@ export default async function InvoicesPage({
   if (term) query = query.or(`number.ilike.${term}`);
 
   const { data: rows } = await query;
+
+  const canCancel = perms.has(P.invoice.edit);
+  const canDelete = perms.has(P.invoice.void);
+  const showActions = canCancel || canDelete;
 
   return (
     <div className="space-y-4">
@@ -55,12 +65,13 @@ export default async function InvoicesPage({
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="text-right">Balance</TableHead>
+              {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
                   {q ? `No invoices match “${q}”.` : "No invoices here."}
                 </TableCell>
               </TableRow>
@@ -76,6 +87,18 @@ export default async function InvoicesPage({
                 <TableCell><StatusBadge status={r.status} /></TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(r.total, r.currency)}</TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(r.balance, r.currency)}</TableCell>
+                {showActions && (
+                  <TableCell>
+                    <DocRowActions
+                      id={r.id}
+                      entityLabel="invoice"
+                      showCancel={canCancel && canCancelDoc("invoice", r.status)}
+                      showDelete={canDelete && canDeleteDoc("invoice", r.status)}
+                      cancel={cancelInvoice}
+                      remove={deleteInvoice}
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

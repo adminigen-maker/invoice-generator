@@ -5,6 +5,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/db/supabase-server";
 import { requirePermission } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
+import { cancelDocument, deleteDocument } from "@/lib/db/doc-lifecycle";
+
+export async function cancelInvoice(id: string) {
+  return cancelDocument("invoice", P.invoice.edit, "/invoices", id);
+}
+
+export async function deleteInvoice(id: string) {
+  return deleteDocument("invoice", P.invoice.void, "/invoices", id);
+}
 
 export async function postInvoice(id: string): Promise<{ ok: boolean; error?: string }> {
   await requirePermission(P.invoice.post);

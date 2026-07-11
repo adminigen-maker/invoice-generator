@@ -11,7 +11,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ListToolbar } from "@/components/list-toolbar";
+import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
+import { canCancelDoc, canDeleteDoc } from "@/lib/doc-status";
+import { cancelQuotation, deleteQuotation } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +43,10 @@ export default async function QuotationsPage({
 
   const { data: rows } = await query;
 
+  const canCancel = perms.has(P.sales.quotationEdit);
+  const canDelete = perms.has(P.sales.quotationDelete);
+  const showActions = canCancel || canDelete;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -66,12 +73,13 @@ export default async function QuotationsPage({
               <TableHead>Valid until</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Total</TableHead>
+              {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 7 : 6} className="text-center text-muted-foreground py-8">
                   {q ? `No quotations match “${q}”.` : "No quotations here."}
                 </TableCell>
               </TableRow>
@@ -88,6 +96,18 @@ export default async function QuotationsPage({
                 <TableCell>{formatDate(quote.valid_until)}</TableCell>
                 <TableCell><StatusBadge status={quote.status} /></TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(quote.total, quote.currency)}</TableCell>
+                {showActions && (
+                  <TableCell>
+                    <DocRowActions
+                      id={quote.id}
+                      entityLabel="quotation"
+                      showCancel={canCancel && canCancelDoc("quotation", quote.status)}
+                      showDelete={canDelete && canDeleteDoc("quotation", quote.status)}
+                      cancel={cancelQuotation}
+                      remove={deleteQuotation}
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

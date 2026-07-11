@@ -29,6 +29,7 @@ export const P = {
     orderCreate: "sales.order.create",
     orderEdit: "sales.order.edit",
     orderCancel: "sales.order.cancel",
+    orderDelete: "sales.order.delete",
   },
   inventory: {
     productView: "inventory.product.view",
@@ -42,6 +43,7 @@ export const P = {
     deliveryCreate: "inventory.delivery.create",
     deliveryEdit: "inventory.delivery.edit",
     deliveryPost: "inventory.delivery.post",
+    deliveryDelete: "inventory.delivery.delete",
     receiptCreate: "inventory.receipt.create",
   },
   invoice: {
@@ -55,5 +57,6 @@ export const P = {
     paymentView: "invoice.payment.view",
     paymentCreate: "invoice.payment.create",
     paymentEdit: "invoice.payment.edit",
+    paymentDelete: "invoice.payment.delete",
   },
 } as const;
