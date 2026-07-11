@@ -13,44 +13,13 @@ import { cache } from "react";
  */
 export const getPermissions = cache(async (): Promise<Set<string>> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return new Set();
-
-  // 1. Look up user's roles.
-  const { data: userRoles } = await supabase
-    .from("user_role")
-    .select("role_id")
-    .eq("user_id", user.id);
-  const roleIds = (userRoles ?? []).map((r) => r.role_id as string);
-
-  // 2. Fetch role permissions and per-user overrides in parallel.
-  const [{ data: rolePerms }, { data: overrides }] = await Promise.all([
-    roleIds.length
-      ? supabase
-          .from("role_permission")
-          .select("permission:app_permission(code)")
-          .in("role_id", roleIds)
-      : Promise.resolve({ data: [] as Array<{ permission: { code?: string } | null }> }),
-    supabase
-      .from("user_permission_override")
-      .select("granted, permission:app_permission(code)")
-      .eq("user_id", user.id),
-  ]);
-
-  const codes = new Set<string>();
-  for (const row of rolePerms ?? []) {
-    const p = row.permission as { code?: string } | null;
-    if (p?.code) codes.add(p.code);
-  }
-  for (const row of overrides ?? []) {
-    const p = row.permission as { code?: string } | null;
-    if (!p?.code) continue;
-    if (row.granted) codes.add(p.code);
-    else codes.delete(p.code);
-  }
-  return codes;
+  // Resolve the full effective permission set in ONE round trip via the
+  // my_permission_codes() RPC (role grants ∪ positive overrides − negative
+  // overrides). Replaces the previous getUser + 3-query chain. Uses auth.uid()
+  // internally, so an anonymous caller simply gets an empty set.
+  const { data, error } = await supabase.rpc("my_permission_codes");
+  if (error || !data) return new Set();
+  return new Set(data as string[]);
 });
 
 export async function can(perm: string): Promise<boolean> {

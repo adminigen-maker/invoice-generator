@@ -30,11 +30,17 @@ export async function recordPayment(input: {
   await requirePermission(P.invoice.paymentCreate);
   const supabase = await createClient();
 
-  const { data: inv } = await supabase
-    .from("invoice")
-    .select("id, customer_id, currency, balance, number")
-    .eq("id", input.invoice_id)
-    .maybeSingle();
+  // Invoice read + user are independent — fetch together. The payment number
+  // is drawn only AFTER validation passes, so a rejected payment never burns a
+  // sequence number (gaps matter for financial documents).
+  const [{ data: inv }, { data: user }] = await Promise.all([
+    supabase
+      .from("invoice")
+      .select("id, customer_id, currency, balance, number")
+      .eq("id", input.invoice_id)
+      .maybeSingle(),
+    supabase.auth.getUser(),
+  ]);
   if (!inv) return { ok: false, error: "Invoice not found" };
 
   if (input.amount > Number(inv.balance) + 0.001) {
@@ -43,7 +49,6 @@ export async function recordPayment(input: {
 
   const { data: numData } = await supabase.rpc("next_document_number", { seq_code: "payment" });
   const number = numData as string;
-  const { data: user } = await supabase.auth.getUser();
 
   const { data: payment, error } = await supabase
     .from("payment")

@@ -1,5 +1,5 @@
-"use client";
-
+// Server component: no client interactivity — sign-out is a native form POST,
+// so this ships zero JS and doesn't hydrate on every page.
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

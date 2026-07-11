@@ -1,22 +1,21 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/db/supabase-server";
+import { getCurrentUser } from "@/lib/db/current-user";
 import { getPermissions } from "@/lib/rbac/can";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const perms = await getPermissions();
-  const { data: profile } = await supabase
-    .from("app_user")
-    .select("display_name, email")
-    .eq("id", user.id)
-    .maybeSingle();
+  const supabase = await createClient();
+  // Permissions (RPC) and the profile lookup are independent — both only need
+  // the already-known user — so run them together instead of serially.
+  const [perms, { data: profile }] = await Promise.all([
+    getPermissions(),
+    supabase.from("app_user").select("display_name, email").eq("id", user.id).maybeSingle(),
+  ]);
 
   return (
     <div className="min-h-screen flex">

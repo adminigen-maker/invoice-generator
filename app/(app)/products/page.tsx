@@ -21,7 +21,8 @@ export default async function ProductsPage() {
   const { data: rows } = await supabase
     .from("product")
     .select("id, sku, name, sale_price, cost_price, is_active, uom:unit_of_measure(code), category:product_category(name)")
-    .order("name");
+    .order("name")
+    .limit(200);
 
   const masked = (await maskFields("product", rows ?? [])) as typeof rows;
 

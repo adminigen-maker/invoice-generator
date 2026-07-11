@@ -20,7 +20,8 @@ export default async function CustomersPage() {
   const { data: rows } = await supabase
     .from("customer")
     .select("id, code, name, tax_registration_number, credit_limit, payment_terms_days, is_active")
-    .order("name");
+    .order("name")
+    .limit(200);
 
   return (
     <div className="space-y-4">

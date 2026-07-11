@@ -18,11 +18,17 @@ export default async function Dashboard() {
     supabase.from("quotation").select("*", { count: "exact", head: true }).eq("status", "draft"),
     supabase.from("sales_order").select("*", { count: "exact", head: true }),
     supabase.from("invoice").select("*", { count: "exact", head: true }).neq("status", "paid"),
-    supabase.from("invoice").select("total, amount_paid, balance"),
+    // Aggregate in the DB (one scalar row) instead of streaming every invoice
+    // and summing in JS. RLS-scoped via the SECURITY INVOKER dashboard_totals().
+    supabase.rpc("dashboard_totals"),
   ]);
 
-  const revenue = (totals ?? []).reduce((s, r) => s + Number(r.total ?? 0), 0);
-  const outstanding = (totals ?? []).reduce((s, r) => s + Number(r.balance ?? 0), 0);
+  const agg = (Array.isArray(totals) ? totals[0] : totals) as
+    | { revenue?: number; outstanding?: number }
+    | null
+    | undefined;
+  const revenue = Number(agg?.revenue ?? 0);
+  const outstanding = Number(agg?.outstanding ?? 0);
 
   return (
     <div className="space-y-6">

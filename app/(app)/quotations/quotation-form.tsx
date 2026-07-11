@@ -96,6 +96,26 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
   const prodMap = useMemo(() => productMap(products), [products]);
   const taxMap = useMemo(() => new Map(taxes.map((t) => [t.id, Number(t.extra?.rate ?? 0)])), [taxes]);
 
+  // Build the dropdown <option> lists ONCE. Without this, every keystroke in any
+  // field re-created N products × rows option elements, the main typing lag.
+  // React lets the same element array be reused across all the row selects.
+  const productOptions = useMemo(
+    () => products.map((p) => <option key={p.id} value={p.id}>{p.label}</option>),
+    [products]
+  );
+  const uomOptions = useMemo(
+    () => uoms.map((u) => <option key={u.id} value={u.id}>{u.label}</option>),
+    [uoms]
+  );
+  const taxOptions = useMemo(
+    () => taxes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>),
+    [taxes]
+  );
+  const customerOptions = useMemo(
+    () => customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>),
+    [customers]
+  );
+
   function updateLine(i: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
@@ -178,7 +198,7 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
             disabled={isReadOnly}
           >
             <option value="">— select customer —</option>
-            {customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            {customerOptions}
           </select>
         </div>
         <div className="space-y-1.5">
@@ -224,7 +244,7 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
                       className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                     >
                       <option value="">—</option>
-                      {products.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                      {productOptions}
                     </select>
                   </td>
                   <td className="p-1.5">
@@ -237,7 +257,7 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
                     <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })} disabled={isReadOnly}
                       className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
                       <option value="">—</option>
-                      {uoms.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+                      {uomOptions}
                     </select>
                   </td>
                   <td className="p-1.5">
@@ -250,7 +270,7 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
                     <select value={l.tax_id} onChange={(e) => updateLine(i, { tax_id: e.target.value })} disabled={isReadOnly}
                       className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
                       <option value="">—</option>
-                      {taxes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                      {taxOptions}
                     </select>
                   </td>
                   <td className="p-1.5 text-right font-mono">{formatMoney(linetotal.line_total, currency)}</td>

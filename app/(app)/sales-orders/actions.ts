@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/db/supabase-server";
 import { requirePermission } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
+import { computeLine } from "@/lib/pricing";
 
 async function nextNumber(code: string) {
   const supabase = await createClient();
@@ -33,9 +34,12 @@ export async function createDeliveryNoteFromSO(salesOrderId: string): Promise<{ 
   );
   if (!outstanding.length) return { ok: false, error: "Nothing left to deliver" };
 
-  const number = await nextNumber("delivery_note");
-  const { data: warehouse } = await supabase.from("warehouse").select("id").limit(1).maybeSingle();
-  const { data: user } = await supabase.auth.getUser();
+  // Independent reads — run together instead of three serial round trips.
+  const [number, { data: warehouse }, { data: user }] = await Promise.all([
+    nextNumber("delivery_note"),
+    supabase.from("warehouse").select("id").limit(1).maybeSingle(),
+    supabase.auth.getUser(),
+  ]);
 
   const { data: dn, error } = await supabase
     .from("delivery_note")
@@ -91,10 +95,22 @@ export async function createInvoiceFromSO(salesOrderId: string): Promise<{ ok: t
 
   if (!invoiceable.length) return { ok: false, error: "Nothing delivered yet to invoice" };
 
-  const number = await nextNumber("invoice");
-  const { data: user } = await supabase.auth.getUser();
-
-  const { data: cust } = await supabase.from("customer").select("payment_terms_days").eq("id", so.customer_id).maybeSingle();
+  // Resolve tax rates + the independent reads all at once (was 3 serial hops).
+  const taxIds = Array.from(
+    new Set(invoiceable.map(({ l }) => l.tax_id).filter(Boolean))
+  ) as string[];
+  const [number, { data: user }, { data: cust }, taxRes] = await Promise.all([
+    nextNumber("invoice"),
+    supabase.auth.getUser(),
+    supabase.from("customer").select("payment_terms_days").eq("id", so.customer_id).maybeSingle(),
+    taxIds.length
+      ? supabase.from("tax_rate").select("id, rate").in("id", taxIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; rate: number }> }),
+  ]);
+  const taxRates = new Map<string, number>();
+  for (const t of (taxRes.data ?? []) as Array<{ id: string; rate: number }>) {
+    taxRates.set(t.id, Number(t.rate));
+  }
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + Number(cust?.payment_terms_days ?? 30));
 
@@ -113,10 +129,22 @@ export async function createInvoiceFromSO(salesOrderId: string): Promise<{ ok: t
     .single();
   if (error) return { ok: false, error: error.message };
 
-  // Recompute per-line totals proportionally to the remaining qty.
+  // Compute every line fully in memory (tax rates already resolved above),
+  // insert once, and update the header once — no refetch, no per-line update
+  // loop. Was 1 insert + 1 refetch + N serial updates; now just 2 writes.
+  const round2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100;
+  let subtotal = 0, discountTotal = 0, taxTotal = 0, total = 0;
   const lines = invoiceable.map(({ l, remaining }, i) => {
-    const gross = remaining * Number(l.unit_price);
-    const discount = gross * Number(l.discount_pct) / 100;
+    const t = computeLine({
+      quantity: remaining,
+      unit_price: l.unit_price,
+      discount_pct: l.discount_pct,
+      tax_rate: l.tax_id ? taxRates.get(l.tax_id) ?? 0 : 0,
+    });
+    subtotal += t.line_subtotal;
+    discountTotal += t.line_discount;
+    taxTotal += t.line_tax;
+    total += t.line_total;
     return {
       invoice_id: inv.id,
       sales_order_line_id: l.id,
@@ -128,41 +156,18 @@ export async function createInvoiceFromSO(salesOrderId: string): Promise<{ ok: t
       unit_price: l.unit_price,
       discount_pct: l.discount_pct,
       tax_id: l.tax_id,
-      line_subtotal: Math.round((gross + Number.EPSILON) * 100) / 100,
-      line_discount: Math.round((discount + Number.EPSILON) * 100) / 100,
-      // Tax is recomputed by a follow-up update once tax_id → rate is resolved (kept simple for MVP).
-      line_tax: 0,
-      line_total: Math.round(((gross - discount) + Number.EPSILON) * 100) / 100,
+      line_subtotal: t.line_subtotal,
+      line_discount: t.line_discount,
+      line_tax: t.line_tax,
+      line_total: t.line_total,
     };
   });
   await supabase.from("invoice_line").insert(lines);
-
-  // Re-fetch with tax rates and recompute for correctness.
-  const { data: withTax } = await supabase
-    .from("invoice_line")
-    .select("id, quantity, unit_price, discount_pct, tax:tax_rate(rate)")
-    .eq("invoice_id", inv.id);
-  let subtotal = 0, discountTotal = 0, taxTotal = 0, total = 0;
-  for (const l of withTax ?? []) {
-    const gross = Number(l.quantity) * Number(l.unit_price);
-    const discount = gross * Number(l.discount_pct) / 100;
-    const taxable = gross - discount;
-    const rate = Number((l.tax as { rate?: number } | null)?.rate ?? 0);
-    const tax = taxable * rate / 100;
-    subtotal += gross;
-    discountTotal += discount;
-    taxTotal += tax;
-    total += taxable + tax;
-    await supabase.from("invoice_line").update({
-      line_tax: Math.round((tax + Number.EPSILON) * 100) / 100,
-      line_total: Math.round(((taxable + tax) + Number.EPSILON) * 100) / 100,
-    }).eq("id", l.id);
-  }
   await supabase.from("invoice").update({
-    subtotal: Math.round((subtotal + Number.EPSILON) * 100) / 100,
-    discount_total: Math.round((discountTotal + Number.EPSILON) * 100) / 100,
-    tax_total: Math.round((taxTotal + Number.EPSILON) * 100) / 100,
-    total: Math.round((total + Number.EPSILON) * 100) / 100,
+    subtotal: round2(subtotal),
+    discount_total: round2(discountTotal),
+    tax_total: round2(taxTotal),
+    total: round2(total),
   }).eq("id", inv.id);
 
   revalidatePath("/sales-orders");
