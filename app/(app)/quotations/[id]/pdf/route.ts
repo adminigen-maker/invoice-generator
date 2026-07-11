@@ -3,7 +3,8 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { createClient } from "@/lib/db/supabase-server";
 import { requirePermission } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
-import { DocumentPdf } from "@/lib/pdf/document-pdf";
+import { DocumentPdf, type DocLine } from "@/lib/pdf/document-pdf";
+import { buildCompany, buildCustomer, taxLabel } from "@/lib/pdf/pdf-data";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   await requirePermission(P.sales.quotationView);
@@ -15,8 +16,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       .from("quotation")
       .select(`
         *,
-        customer:customer(name, tax_registration_number),
-        lines:quotation_line(description, quantity, unit_price, discount_pct, line_total, tax:tax_rate(code, rate))
+        customer:customer(name, tax_registration_number, addresses:customer_address(kind, line1, line2, city, region, country, is_default)),
+        lines:quotation_line(sequence, description, quantity, unit_price, line_subtotal, line_discount, line_tax,
+          uom:unit_of_measure(code), tax:tax_rate(rate))
       `)
       .eq("id", id)
       .maybeSingle(),
@@ -25,42 +27,34 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   if (!q) return new NextResponse("Not found", { status: 404 });
 
+  const lines: DocLine[] = ((q.lines ?? []) as Array<Record<string, unknown>>)
+    .sort((a, b) => Number(a.sequence) - Number(b.sequence))
+    .map((l) => ({
+      description: String(l.description ?? ""),
+      quantity: Number(l.quantity ?? 0),
+      uom: (l.uom as { code?: string } | null)?.code ?? "Units",
+      unit_price: Number(l.unit_price ?? 0),
+      tax_label: taxLabel((l.tax as { rate?: number } | null)?.rate),
+      tax_amount: Number(l.line_tax ?? 0),
+      amount: Number(l.line_subtotal ?? 0) - Number(l.line_discount ?? 0),
+    }));
+
   const pdf = await renderToBuffer(
     DocumentPdf({
-      documentTitle: "QUOTATION",
+      documentTitle: "Quotation",
       documentNumber: q.number,
       documentDate: q.quote_date,
-      company: {
-        name: company?.name ?? "Company",
-        address: [company?.address_line1, company?.address_line2, company?.city, company?.country].filter(Boolean).join(", "),
-        trn: company?.tax_registration_number ?? undefined,
-        email: company?.email ?? undefined,
-        phone: company?.phone ?? undefined,
-      },
-      customer: {
-        name: (q.customer as { name?: string } | null)?.name ?? "—",
-        trn: (q.customer as { tax_registration_number?: string } | null)?.tax_registration_number ?? undefined,
-      },
+      paymentTerms: q.terms ?? undefined,
+      company: buildCompany(company),
+      customer: buildCustomer(q.customer),
       currency: q.currency,
-      lines: (q.lines ?? []).map((l: {
-        description: string; quantity: number; unit_price: number; discount_pct: number; line_total: number;
-        tax?: { code?: string; rate?: number } | null;
-      }) => ({
-        description: l.description,
-        quantity: Number(l.quantity),
-        unit_price: Number(l.unit_price),
-        discount_pct: Number(l.discount_pct),
-        line_total: Number(l.line_total),
-        tax_label: l.tax?.code ? `${l.tax.code} ${Number(l.tax.rate).toFixed(0)}%` : undefined,
-      })),
+      lines,
       totals: {
-        subtotal: Number(q.subtotal),
-        discount_total: Number(q.discount_total),
-        tax_total: Number(q.tax_total),
+        untaxed: Number(q.subtotal) - Number(q.discount_total),
+        tax: Number(q.tax_total),
         total: Number(q.total),
       },
-      notes: q.notes ?? undefined,
-      terms: q.terms ?? undefined,
+      showTax: true,
     })
   );
 

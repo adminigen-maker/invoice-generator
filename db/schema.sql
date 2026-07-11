@@ -1,5 +1,5 @@
 -- =====================================================================
--- Invoice UAE — Consolidated schema (all migrations 0001–0014)
+-- Invoice UAE — Consolidated schema (all migrations 0001–0015)
 -- One-shot install: paste into the Supabase SQL Editor and Run.
 -- Generated from db/migrations/*.sql; edit those, not this file.
 -- =====================================================================
@@ -1753,4 +1753,13 @@ drop policy if exists admin_write_sequence on public.document_sequence;
 create policy admin_write_sequence on public.document_sequence for update to authenticated
   using (public.has_permission('admin.sequence.edit'))
   with check (public.has_permission('admin.sequence.edit'));
+
+
+-- ## SOURCE: db/migrations/0015_company_bank_whatsapp.sql
+
+-- =====================================================================
+-- 0015 · Company fields used by the printed invoice/quotation footer
+-- =====================================================================
+alter table public.company add column if not exists bank_account text;
+alter table public.company add column if not exists whatsapp text;
 

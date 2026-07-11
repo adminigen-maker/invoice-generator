@@ -1,145 +1,282 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
+
+/**
+ * Invoice / quotation PDF — matches the client's Odoo-style "TAX Invoice"
+ * template (DIA layout): company block top-right, bill-to left, large title,
+ * 6-column line table, Untaxed Amount + Total, signature line, and the
+ * phone/WhatsApp/email/website footer.
+ */
 
 const styles = StyleSheet.create({
-  page: { padding: 32, fontSize: 10, fontFamily: "Helvetica", color: "#0f172a" },
-  header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
-  companyName: { fontSize: 14, fontWeight: 700 },
-  docTitle: { fontSize: 20, fontWeight: 700, marginBottom: 2, textAlign: "right" },
-  meta: { textAlign: "right", color: "#475569" },
-  section: { marginBottom: 12 },
-  row: { flexDirection: "row" },
-  col: { flex: 1 },
-  label: { color: "#64748b", fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5 },
-  bold: { fontWeight: 700 },
-  table: { borderTop: 1, borderColor: "#e2e8f0", marginTop: 8 },
-  th: {
-    flexDirection: "row", borderBottom: 1, borderColor: "#e2e8f0",
-    paddingVertical: 6, paddingHorizontal: 4, backgroundColor: "#f8fafc",
+  page: {
+    paddingTop: 30,
+    paddingBottom: 56,
+    paddingHorizontal: 30,
+    fontSize: 9,
+    fontFamily: "Helvetica",
+    color: "#111827",
+    lineHeight: 1.35,
   },
-  tr: { flexDirection: "row", borderBottom: 1, borderColor: "#f1f5f9", paddingVertical: 6, paddingHorizontal: 4 },
-  colDesc: { flex: 3 },
-  colQty:  { flex: 1, textAlign: "right" },
-  colPrice:{ flex: 1.2, textAlign: "right" },
-  colTax:  { flex: 1, textAlign: "right" },
-  colTotal:{ flex: 1.4, textAlign: "right" },
-  totals: { marginTop: 12, alignSelf: "flex-end", width: 240 },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
-  grand: { borderTop: 1, borderColor: "#0f172a", marginTop: 4, paddingTop: 4, fontWeight: 700, fontSize: 12 },
-  footer: { position: "absolute", bottom: 24, left: 32, right: 32, fontSize: 8, color: "#94a3b8" },
+
+  // Header
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  logo: { width: 130, maxHeight: 60, objectFit: "contain" },
+  companyBlock: { alignItems: "flex-end", textAlign: "right" },
+  companyName: { fontSize: 11, fontFamily: "Helvetica-Bold" },
+  trn: { marginTop: 6, fontFamily: "Helvetica-Bold" },
+
+  // Bill-to + title
+  midRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 34 },
+  billTo: { maxWidth: 260 },
+  billName: { fontFamily: "Helvetica-Bold" },
+  title: { fontSize: 18, fontFamily: "Helvetica-Bold" },
+
+  // Meta
+  metaRow: { flexDirection: "row", marginTop: 22, borderTopWidth: 1, borderColor: "#111827", paddingTop: 8 },
+  metaCol: { flex: 1 },
+  metaLabel: { fontFamily: "Helvetica-Bold", marginBottom: 2 },
+
+  // Table
+  table: { marginTop: 18 },
+  thead: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderColor: "#111827",
+    paddingBottom: 5,
+  },
+  th: { fontFamily: "Helvetica-Bold", fontSize: 8 },
+  tr: { flexDirection: "row", borderBottomWidth: 0.5, borderColor: "#e5e7eb", paddingVertical: 5 },
+  colDesc: { flex: 34 },
+  colQty: { flex: 14, textAlign: "right" },
+  colPrice: { flex: 12, textAlign: "right" },
+  colVat: { flex: 8, textAlign: "right" },
+  colVatAmt: { flex: 14, textAlign: "right" },
+  colAmount: { flex: 15, textAlign: "right" },
+
+  // Totals
+  bottomRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 16 },
+  payBlock: { maxWidth: 300, fontSize: 8.5, color: "#374151" },
+  totalsBlock: { width: 230 },
+  totalLine: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
+  grandLine: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderColor: "#111827",
+    marginTop: 3,
+    paddingTop: 4,
+  },
+  grandText: { fontFamily: "Helvetica-Bold", fontSize: 11 },
+
+  // Signature
+  signRow: { flexDirection: "row", marginTop: 42, fontSize: 9 },
+  signCell: { flex: 1 },
+
+  // Footer
+  footer: {
+    position: "absolute",
+    bottom: 22,
+    left: 30,
+    right: 30,
+    textAlign: "center",
+    fontSize: 8,
+    color: "#4b5563",
+  },
+  footerLink: { color: "#2563eb" },
+  bold: { fontFamily: "Helvetica-Bold" },
 });
 
 export type DocLine = {
   description: string;
   quantity: number;
+  uom: string;
   unit_price: number;
-  discount_pct: number;
-  line_total: number;
-  tax_label?: string;
+  tax_label: string;
+  tax_amount: number;
+  amount: number;
 };
 
 export type DocumentPdfProps = {
-  documentTitle: string;         // "QUOTATION" / "INVOICE" / etc.
+  documentTitle: string;
   documentNumber: string;
   documentDate: string;
   dueDate?: string;
+  source?: string;
+  paymentTerms?: string;
+  paymentCommunication?: string;
   company: {
     name: string;
-    address?: string;
+    addressLine1?: string;
+    cityCountry?: string;
     trn?: string;
-    email?: string;
     phone?: string;
+    whatsapp?: string;
+    email?: string;
+    website?: string;
+    bankAccount?: string;
+    logoUrl?: string;
   };
-  customer: {
-    name: string;
-    address?: string;
-    trn?: string;
-  };
+  customer: { name: string; addressLines: string[]; trn?: string };
   currency: string;
   lines: DocLine[];
-  totals: {
-    subtotal: number;
-    discount_total: number;
-    tax_total: number;
-    total: number;
-  };
-  notes?: string;
-  terms?: string;
+  totals: { untaxed: number; tax: number; total: number };
+  showTax?: boolean;
 };
 
-const money = (n: number, cur: string) => `${cur} ${n.toFixed(2)}`;
+const num = (n: number) => Number(n || 0).toFixed(2);
+const money = (n: number, cur: string) => `${cur} ${num(n)}`;
+
+function fmtDate(s?: string): string {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
 
 export function DocumentPdf(p: DocumentPdfProps) {
+  const showTax = p.showTax ?? true;
+  const c = p.company;
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.companyName}>{p.company.name}</Text>
-            {p.company.address && <Text>{p.company.address}</Text>}
-            {p.company.trn && <Text>TRN: {p.company.trn}</Text>}
-            {p.company.email && <Text>{p.company.email}</Text>}
-            {p.company.phone && <Text>{p.company.phone}</Text>}
-          </View>
-          <View>
-            <Text style={styles.docTitle}>{p.documentTitle}</Text>
-            <Text style={styles.meta}>{p.documentNumber}</Text>
-            <Text style={styles.meta}>Date: {p.documentDate}</Text>
-            {p.dueDate && <Text style={styles.meta}>Due: {p.dueDate}</Text>}
+        {/* Header: optional logo left, company block right */}
+        <View style={styles.headerRow}>
+          <View>{c.logoUrl ? <Image src={c.logoUrl} style={styles.logo} /> : <Text> </Text>}</View>
+          <View style={styles.companyBlock}>
+            <Text style={styles.companyName}>{c.name}</Text>
+            {c.addressLine1 ? <Text>{c.addressLine1}</Text> : null}
+            {c.cityCountry ? <Text>{c.cityCountry}</Text> : null}
+            {c.trn ? <Text style={styles.trn}>TRN: {c.trn}</Text> : null}
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Bill to</Text>
-          <Text style={styles.bold}>{p.customer.name}</Text>
-          {p.customer.address && <Text>{p.customer.address}</Text>}
-          {p.customer.trn && <Text>TRN: {p.customer.trn}</Text>}
+        {/* Bill-to (left) + big title (right) */}
+        <View style={styles.midRow}>
+          <View style={styles.billTo}>
+            <Text style={styles.billName}>{p.customer.name}</Text>
+            {p.customer.addressLines.filter(Boolean).map((l, i) => (
+              <Text key={i}>{l}</Text>
+            ))}
+            {p.customer.trn ? <Text>TRN: {p.customer.trn}</Text> : null}
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={styles.title}>
+              {p.documentTitle} {p.documentNumber}
+            </Text>
+          </View>
         </View>
 
+        {/* Meta row */}
+        <View style={styles.metaRow}>
+          <View style={styles.metaCol}>
+            <Text style={styles.metaLabel}>{p.dueDate ? "Invoice Date" : "Date"}</Text>
+            <Text>{fmtDate(p.documentDate)}</Text>
+          </View>
+          {p.dueDate ? (
+            <View style={styles.metaCol}>
+              <Text style={styles.metaLabel}>Due Date</Text>
+              <Text>{fmtDate(p.dueDate)}</Text>
+            </View>
+          ) : (
+            <View style={styles.metaCol} />
+          )}
+          {p.source ? (
+            <View style={styles.metaCol}>
+              <Text style={styles.metaLabel}>Source</Text>
+              <Text>{p.source}</Text>
+            </View>
+          ) : (
+            <View style={styles.metaCol} />
+          )}
+        </View>
+
+        {/* Line items table */}
         <View style={styles.table}>
-          <View style={styles.th}>
-            <Text style={styles.colDesc}>Description</Text>
-            <Text style={styles.colQty}>Qty</Text>
-            <Text style={styles.colPrice}>Unit price</Text>
-            <Text style={styles.colTax}>Tax</Text>
-            <Text style={styles.colTotal}>Total</Text>
+          <View style={styles.thead}>
+            <Text style={[styles.th, styles.colDesc]}>DESCRIPTION</Text>
+            <Text style={[styles.th, styles.colQty]}>QUANTITY</Text>
+            <Text style={[styles.th, styles.colPrice]}>UNIT PRICE</Text>
+            {showTax ? <Text style={[styles.th, styles.colVat]}>VAT</Text> : null}
+            {showTax ? <Text style={[styles.th, styles.colVatAmt]}>VAT AMOUNT</Text> : null}
+            <Text style={[styles.th, styles.colAmount]}>AMOUNT</Text>
           </View>
           {p.lines.map((l, i) => (
-            <View key={i} style={styles.tr}>
+            <View key={i} style={styles.tr} wrap={false}>
               <Text style={styles.colDesc}>{l.description}</Text>
-              <Text style={styles.colQty}>{Number(l.quantity).toFixed(2)}</Text>
-              <Text style={styles.colPrice}>{money(Number(l.unit_price), p.currency)}</Text>
-              <Text style={styles.colTax}>{l.tax_label ?? "—"}</Text>
-              <Text style={styles.colTotal}>{money(Number(l.line_total), p.currency)}</Text>
+              <Text style={styles.colQty}>
+                {num(l.quantity)}
+                {l.uom ? ` ${l.uom}` : ""}
+              </Text>
+              <Text style={styles.colPrice}>{num(l.unit_price)}</Text>
+              {showTax ? <Text style={styles.colVat}>{l.tax_label}</Text> : null}
+              {showTax ? <Text style={styles.colVatAmt}>{money(l.tax_amount, p.currency)}</Text> : null}
+              <Text style={styles.colAmount}>{money(l.amount, p.currency)}</Text>
             </View>
           ))}
         </View>
 
-        <View style={styles.totals}>
-          <View style={styles.totalRow}><Text>Subtotal</Text><Text>{money(p.totals.subtotal, p.currency)}</Text></View>
-          {p.totals.discount_total > 0 && (
-            <View style={styles.totalRow}><Text>Discount</Text><Text>− {money(p.totals.discount_total, p.currency)}</Text></View>
-          )}
-          <View style={styles.totalRow}><Text>Tax</Text><Text>{money(p.totals.tax_total, p.currency)}</Text></View>
-          <View style={[styles.totalRow, styles.grand]}><Text>Total</Text><Text>{money(p.totals.total, p.currency)}</Text></View>
+        {/* Payment info (left) + totals (right) */}
+        <View style={styles.bottomRow}>
+          <View style={styles.payBlock}>
+            {p.paymentTerms ? <Text>Payment terms: {p.paymentTerms}</Text> : null}
+            {p.paymentCommunication ? (
+              <Text style={{ marginTop: 8 }}>
+                <Text style={styles.bold}>Payment Communication: </Text>
+                {p.paymentCommunication}
+              </Text>
+            ) : null}
+            {c.bankAccount ? (
+              <Text style={{ marginTop: 2 }}>
+                Please use the following communication for your payment on this account: {c.bankAccount}
+              </Text>
+            ) : null}
+          </View>
+          <View style={styles.totalsBlock}>
+            <View style={styles.totalLine}>
+              <Text>Untaxed Amount</Text>
+              <Text>{money(p.totals.untaxed, p.currency)}</Text>
+            </View>
+            {showTax && p.totals.tax > 0 ? (
+              <View style={styles.totalLine}>
+                <Text>VAT</Text>
+                <Text>{money(p.totals.tax, p.currency)}</Text>
+              </View>
+            ) : null}
+            <View style={styles.grandLine}>
+              <Text style={styles.grandText}>Total</Text>
+              <Text style={styles.grandText}>{money(p.totals.total, p.currency)}</Text>
+            </View>
+          </View>
         </View>
 
-        {(p.notes || p.terms) && (
-          <View style={{ marginTop: 24 }}>
-            {p.notes && (<>
-              <Text style={styles.label}>Notes</Text>
-              <Text>{p.notes}</Text>
-            </>)}
-            {p.terms && (<View style={{ marginTop: 8 }}>
-              <Text style={styles.label}>Terms & conditions</Text>
-              <Text>{p.terms}</Text>
-            </View>)}
-          </View>
-        )}
+        {/* Signature line */}
+        <View style={styles.signRow}>
+          <Text style={styles.signCell}>Name:</Text>
+          <Text style={styles.signCell}>Date:</Text>
+          <Text style={styles.signCell}>Signature and Stamp:</Text>
+        </View>
 
-        <Text style={styles.footer}>
-          {p.company.name} — Generated {new Date().toISOString().slice(0, 10)}
-        </Text>
+        {/* Footer */}
+        <View style={styles.footer} fixed>
+          <Text>
+            {[
+              c.phone ? `Phone: ${c.phone}` : null,
+              c.whatsapp ? `WhatsApp: ${c.whatsapp}` : null,
+              c.email ? `Email: ${c.email}` : null,
+            ]
+              .filter(Boolean)
+              .join("   |   ")}
+          </Text>
+          {c.website ? <Text style={styles.footerLink}>{c.website}</Text> : null}
+          <Text
+            style={{ marginTop: 3 }}
+            render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`}
+          />
+        </View>
       </Page>
     </Document>
   );
