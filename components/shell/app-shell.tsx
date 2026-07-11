@@ -65,21 +65,37 @@ export function AppShell({
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Desktop sidebar — collapsible. Hidden below md (the drawer takes over). */}
+      {/* Desktop sidebar — collapses to a slim icon rail. Hidden below md
+          (the drawer takes over). */}
       <aside
         className={cn(
-          "hidden md:flex shrink-0 bg-background flex-col overflow-hidden",
+          "hidden md:flex shrink-0 bg-background flex-col overflow-hidden border-r",
           ready && "transition-[width] duration-200 ease-in-out",
-          collapsed ? "w-0 border-r-0" : "w-60 border-r"
+          collapsed ? "w-16" : "w-60"
         )}
       >
-        <div className="h-14 flex items-center px-5 border-b shrink-0 w-60">
-          <Link href="/" className="font-semibold tracking-tight whitespace-nowrap">
-            Invoice <span className="text-muted-foreground">UAE</span>
+        <div className="h-14 flex items-center border-b shrink-0 w-full overflow-hidden">
+          <Link
+            href="/"
+            title="Invoice UAE"
+            className={cn(
+              "font-semibold tracking-tight whitespace-nowrap flex items-center",
+              collapsed ? "justify-center w-full" : "px-5"
+            )}
+          >
+            {collapsed ? (
+              <span className="h-8 w-8 rounded-md bg-primary text-primary-foreground grid place-items-center text-xs font-bold">
+                IU
+              </span>
+            ) : (
+              <>
+                Invoice <span className="text-muted-foreground ml-1">UAE</span>
+              </>
+            )}
           </Link>
         </div>
-        <div className="flex flex-1 flex-col min-h-0 w-60">
-          <SidebarContent permissions={permissions} />
+        <div className="flex flex-1 flex-col min-h-0 w-full">
+          <SidebarContent permissions={permissions} collapsed={collapsed} />
         </div>
       </aside>
 

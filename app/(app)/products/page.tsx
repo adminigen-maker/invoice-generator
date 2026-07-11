@@ -76,7 +76,7 @@ export default async function ProductsPage({
                 <TableHead className="text-right">Cost price</TableHead>
               )}
               <TableHead>Status</TableHead>
-              {showActions && <TableHead className="w-10" />}
+              {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -71,7 +71,7 @@ export default async function CustomersPage({
               <TableHead className="text-right">Credit limit</TableHead>
               <TableHead>Payment terms</TableHead>
               <TableHead>Status</TableHead>
-              {showActions && <TableHead className="w-10" />}
+              {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -3,16 +3,18 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreHorizontal, Power, PowerOff, Trash2, Loader2 } from "lucide-react";
+import { Power, PowerOff, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 type ActionResult = { ok: boolean; error?: string };
 
 /**
- * Per-row menu for list tables: Activate / Deactivate (toggles is_active) and
- * Delete (with a confirm dialog). The server actions are passed in from the
- * page, and each item only shows if the caller passed the matching permission.
+ * Per-row actions for list tables: Activate / Deactivate (toggles is_active)
+ * and Delete (with a confirm dialog). Rendered as visible inline icon buttons.
+ * The server actions are passed in from the page; each button only shows if the
+ * caller passed the matching permission.
  */
 export function RowActions({
   id,
@@ -33,7 +35,6 @@ export function RowActions({
 }) {
   const router = useRouter();
   const [pending, startTx] = useTransition();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const showDeactivate = canDeactivate && !!setActive;
@@ -41,7 +42,6 @@ export function RowActions({
   if (!showDeactivate && !showDelete) return null;
 
   function doSetActive(active: boolean) {
-    setMenuOpen(false);
     startTx(async () => {
       const res = await setActive!(id, active);
       if (!res.ok) toast.error(res.error);
@@ -66,38 +66,45 @@ export function RowActions({
   }
 
   return (
-    <div className="relative flex justify-end">
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMenuOpen((o) => !o)} aria-label="Row actions">
-        <MoreHorizontal className="h-4 w-4" />
-      </Button>
-
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-8 z-20 w-40 rounded-md border bg-popover text-popover-foreground shadow-lg py-1 text-sm">
-            {showDeactivate &&
-              (isActive ? (
-                <button className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-accent" onClick={() => doSetActive(false)}>
-                  <PowerOff className="h-4 w-4" /> Deactivate
-                </button>
-              ) : (
-                <button className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-accent" onClick={() => doSetActive(true)}>
-                  <Power className="h-4 w-4" /> Activate
-                </button>
-              ))}
-            {showDelete && (
-              <button
-                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-accent text-destructive"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setConfirmDelete(true);
-                }}
-              >
-                <Trash2 className="h-4 w-4" /> Delete
-              </button>
-            )}
-          </div>
-        </>
+    <div className="flex items-center justify-end gap-1">
+      {showDeactivate &&
+        (isActive ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => doSetActive(false)}
+            title="Deactivate"
+            aria-label="Deactivate"
+            className="inline-grid h-8 w-8 place-items-center rounded-md border text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+          >
+            <PowerOff className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => doSetActive(true)}
+            title="Activate"
+            aria-label="Activate"
+            className="inline-grid h-8 w-8 place-items-center rounded-md border text-emerald-600 hover:bg-accent disabled:opacity-50"
+          >
+            <Power className="h-4 w-4" />
+          </button>
+        ))}
+      {showDelete && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setConfirmDelete(true)}
+          title="Delete"
+          aria-label="Delete"
+          className={cn(
+            "inline-grid h-8 w-8 place-items-center rounded-md border text-muted-foreground",
+            "hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 disabled:opacity-50"
+          )}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       )}
 
       <Dialog
