@@ -9,8 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
-import { canCancelDoc, canDeleteDoc } from "@/lib/doc-status";
-import { cancelDeliveryNote, deleteDeliveryNote } from "./actions";
+import { canDeleteDoc } from "@/lib/doc-status";
+import { deleteDeliveryNote } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +39,8 @@ export default async function DeliveryNotesPage({
 
   const { data: rows } = await query;
 
-  const canCancel = perms.has(P.inventory.deliveryEdit);
   const canDelete = perms.has(P.inventory.deliveryDelete);
-  const showActions = canCancel || canDelete;
+  const showActions = canDelete;
 
   return (
     <div className="space-y-4">
@@ -92,9 +91,10 @@ export default async function DeliveryNotesPage({
                       <DocRowActions
                         id={r.id}
                         entityLabel="delivery note"
-                        showCancel={canCancel && canCancelDoc("delivery_note", r.status)}
-                        showDelete={canDelete && canDeleteDoc("delivery_note", r.status)}
-                        cancel={cancelDeliveryNote}
+                        canCancel={false}
+                        cancelEnabled={false}
+                        canDelete={canDelete}
+                        deleteEnabled={canDeleteDoc("delivery_note", r.status)}
                         remove={deleteDeliveryNote}
                       />
                     </TableCell>

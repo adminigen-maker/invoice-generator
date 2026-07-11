@@ -11,21 +11,29 @@ type ActionResult = { ok: boolean; error?: string };
 
 /**
  * Row actions for transactional documents: Cancel (status → cancelled) and
- * Delete. Both confirm first. Whether each is shown is decided by the page
- * (permission + safe lifecycle state), so this component just renders.
+ * Delete. Both confirm first.
+ *
+ * A button is SHOWN whenever the user holds the permission, and DISABLED (with a
+ * tooltip) when the document's current status doesn't allow it — so the Actions
+ * column is never a bare "—" for someone who can act, and the reason is visible.
+ * The server still enforces the safe states regardless of what the UI shows.
  */
 export function DocRowActions({
   id,
   entityLabel,
-  showCancel,
-  showDelete,
+  canCancel,
+  cancelEnabled,
+  canDelete,
+  deleteEnabled,
   cancel,
   remove,
 }: {
   id: string;
   entityLabel: string;
-  showCancel: boolean;
-  showDelete: boolean;
+  canCancel: boolean;
+  cancelEnabled: boolean;
+  canDelete: boolean;
+  deleteEnabled: boolean;
   cancel?: (id: string) => Promise<ActionResult>;
   remove?: (id: string) => Promise<ActionResult>;
 }) {
@@ -33,6 +41,8 @@ export function DocRowActions({
   const [pending, startTx] = useTransition();
   const [confirm, setConfirm] = useState<null | "cancel" | "delete">(null);
 
+  const showCancel = canCancel && !!cancel;
+  const showDelete = canDelete && !!remove;
   if (!showCancel && !showDelete) return <span className="text-muted-foreground">—</span>;
 
   function run(kind: "cancel" | "delete") {
@@ -55,11 +65,11 @@ export function DocRowActions({
       {showCancel && (
         <button
           type="button"
-          disabled={pending}
+          disabled={pending || !cancelEnabled}
           onClick={() => setConfirm("cancel")}
-          title="Cancel"
+          title={cancelEnabled ? "Cancel" : `Can't cancel this ${entityLabel} at its current status`}
           aria-label="Cancel"
-          className="inline-grid h-8 w-8 place-items-center rounded-md border text-muted-foreground hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/40 disabled:opacity-50"
+          className="inline-grid h-8 w-8 place-items-center rounded-md border text-muted-foreground enabled:hover:bg-amber-500/10 enabled:hover:text-amber-600 enabled:hover:border-amber-500/40 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Ban className="h-4 w-4" />
         </button>
@@ -67,11 +77,11 @@ export function DocRowActions({
       {showDelete && (
         <button
           type="button"
-          disabled={pending}
+          disabled={pending || !deleteEnabled}
           onClick={() => setConfirm("delete")}
-          title="Delete"
+          title={deleteEnabled ? "Delete" : `Can't delete this ${entityLabel} at its current status`}
           aria-label="Delete"
-          className="inline-grid h-8 w-8 place-items-center rounded-md border text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 disabled:opacity-50"
+          className="inline-grid h-8 w-8 place-items-center rounded-md border text-muted-foreground enabled:hover:bg-destructive/10 enabled:hover:text-destructive enabled:hover:border-destructive/40 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Trash2 className="h-4 w-4" />
         </button>

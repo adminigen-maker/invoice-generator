@@ -88,8 +88,10 @@ export default async function SalesOrdersPage({
                     <DocRowActions
                       id={r.id}
                       entityLabel="sales order"
-                      showCancel={canCancel && canCancelDoc("sales_order", r.status)}
-                      showDelete={canDelete && canDeleteDoc("sales_order", r.status)}
+                      canCancel={canCancel}
+                      cancelEnabled={canCancelDoc("sales_order", r.status)}
+                      canDelete={canDelete}
+                      deleteEnabled={canDeleteDoc("sales_order", r.status)}
                       cancel={cancelSalesOrder}
                       remove={deleteSalesOrder}
                     />

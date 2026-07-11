@@ -92,8 +92,10 @@ export default async function InvoicesPage({
                     <DocRowActions
                       id={r.id}
                       entityLabel="invoice"
-                      showCancel={canCancel && canCancelDoc("invoice", r.status)}
-                      showDelete={canDelete && canDeleteDoc("invoice", r.status)}
+                      canCancel={canCancel}
+                      cancelEnabled={canCancelDoc("invoice", r.status)}
+                      canDelete={canDelete}
+                      deleteEnabled={canDeleteDoc("invoice", r.status)}
                       cancel={cancelInvoice}
                       remove={deleteInvoice}
                     />

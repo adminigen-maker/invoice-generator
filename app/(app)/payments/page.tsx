@@ -78,8 +78,10 @@ export default async function PaymentsPage({
                     <DocRowActions
                       id={r.id}
                       entityLabel="payment"
-                      showCancel={false}
-                      showDelete={canDelete}
+                      canCancel={false}
+                      cancelEnabled={false}
+                      canDelete={canDelete}
+                      deleteEnabled={true}
                       remove={deletePayment}
                     />
                   </TableCell>

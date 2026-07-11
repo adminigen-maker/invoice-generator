@@ -101,8 +101,10 @@ export default async function QuotationsPage({
                     <DocRowActions
                       id={quote.id}
                       entityLabel="quotation"
-                      showCancel={canCancel && canCancelDoc("quotation", quote.status)}
-                      showDelete={canDelete && canDeleteDoc("quotation", quote.status)}
+                      canCancel={canCancel}
+                      cancelEnabled={canCancelDoc("quotation", quote.status)}
+                      canDelete={canDelete}
+                      deleteEnabled={canDeleteDoc("quotation", quote.status)}
                       cancel={cancelQuotation}
                       remove={deleteQuotation}
                     />

@@ -25,7 +25,7 @@ function friendlyDeleteError(message: string): string {
     return "This document has been posted/issued and can't be deleted. Cancel or reverse it instead.";
   }
   if (/foreign key|violates|referenced|23503/i.test(message)) {
-    return "Can't delete: this document is linked to other records. Cancel it instead.";
+    return "Can't delete: this document is linked to newer ones (e.g. a sales order, delivery note, invoice or payment). Remove those first.";
   }
   return message;
 }

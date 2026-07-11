@@ -25,11 +25,13 @@ export const CANCELLABLE_STATUS: Partial<Record<DocType, string[]>> = {
 };
 
 export const DELETABLE_STATUS: Partial<Record<DocType, string[]>> = {
-  quotation: ["draft", "sent", "cancelled"],
-  sales_order: ["draft", "confirmed", "cancelled"],
+  // quotation & sales_order have no stock/financial side effects, so they are
+  // deletable in ANY status — the cross-document foreign keys (NO ACTION) are
+  // the real guard (they block deleting a quote that became an order, or an
+  // order that has deliveries/invoices).
   delivery_note: ["draft", "cancelled"],
   invoice: ["draft", "cancelled"],
-  // payment: no status column — always deletable (balance is restored by trigger)
+  // payment: no status column — always deletable (balance restored by trigger)
 };
 
 export function canCancelDoc(type: DocType, status: string | null | undefined): boolean {
