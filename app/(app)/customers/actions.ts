@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/db/supabase-server";
 import { requirePermission } from "@/lib/rbac/can";
@@ -41,7 +40,7 @@ async function nextCode() {
   return (data as string) ?? `CUST-${Date.now()}`;
 }
 
-export async function createCustomer(_prev: FormResult | undefined, fd: FormData): Promise<FormResult> {
+export async function createCustomer(fd: FormData): Promise<FormResult> {
   try {
     await requirePermission(P.sales.customerCreate);
     if (!fd.get("code") || fd.get("code") === "") fd.set("code", await nextCode());
@@ -55,17 +54,13 @@ export async function createCustomer(_prev: FormResult | undefined, fd: FormData
       .single();
     if (error) return { ok: false, error: error.message };
     revalidatePath("/customers");
-    redirect(`/customers/${data.id}`);
+    return { ok: true, id: data.id };
   } catch (e) {
-    if ((e as { code?: string }).code === "PERMISSION_DENIED") {
-      return { ok: false, error: "You don't have permission to create customers." };
-    }
-    if (e instanceof z.ZodError) return { ok: false, error: e.issues[0].message };
-    throw e;
+    return { ok: false, error: actionError(e, "create customers") };
   }
 }
 
-export async function updateCustomer(id: string, _prev: FormResult | undefined, fd: FormData): Promise<FormResult> {
+export async function updateCustomer(id: string, fd: FormData): Promise<FormResult> {
   try {
     await requirePermission(P.sales.customerEdit);
     const input = parseForm(fd);
@@ -76,10 +71,57 @@ export async function updateCustomer(id: string, _prev: FormResult | undefined, 
     revalidatePath(`/customers/${id}`);
     return { ok: true, id };
   } catch (e) {
-    if ((e as { code?: string }).code === "PERMISSION_DENIED") {
-      return { ok: false, error: "You don't have permission to edit customers." };
-    }
-    if (e instanceof z.ZodError) return { ok: false, error: e.issues[0].message };
-    throw e;
+    return { ok: false, error: actionError(e, "edit customers") };
   }
+}
+
+// Minimal inline creation used by the "+ New customer" quick-add in forms.
+const quickCustomerSchema = z.object({
+  name: z.string().min(1, "Name required"),
+  email: z.string().email().optional().or(z.literal("")).nullable(),
+  phone: z.string().optional().nullable(),
+  payment_terms_days: z.coerce.number().int().min(0).default(30),
+  default_tax_id: z.string().uuid().optional().nullable().or(z.literal("")),
+});
+
+export type QuickCustomer = { id: string; label: string; extra: { default_tax_id: string | null } };
+
+export async function quickCreateCustomer(
+  input: unknown
+): Promise<{ ok: true; item: QuickCustomer } | { ok: false; error: string }> {
+  try {
+    await requirePermission(P.sales.customerCreate);
+    const v = quickCustomerSchema.parse(input);
+    const supabase = await createClient();
+    const { data: user } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("customer")
+      .insert({
+        code: await nextCode(),
+        name: v.name,
+        email: v.email || null,
+        phone: v.phone || null,
+        payment_terms_days: v.payment_terms_days,
+        default_tax_id: v.default_tax_id || null,
+        created_by: user.user?.id,
+      })
+      .select("id, code, name, default_tax_id")
+      .single();
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/customers");
+    return {
+      ok: true,
+      item: { id: data.id, label: `${data.code} — ${data.name}`, extra: { default_tax_id: data.default_tax_id } },
+    };
+  } catch (e) {
+    return { ok: false, error: actionError(e, "create customers") };
+  }
+}
+
+function actionError(e: unknown, action: string): string {
+  if ((e as { code?: string })?.code === "PERMISSION_DENIED") {
+    return `You don't have permission to ${action}.`;
+  }
+  if (e instanceof z.ZodError) return e.issues[0].message;
+  return (e as Error)?.message ?? "Something went wrong";
 }

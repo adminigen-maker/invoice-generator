@@ -1,7 +1,9 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,17 +28,29 @@ export type CustomerValues = {
 };
 
 export function CustomerForm({ initial, taxes }: { initial?: CustomerValues; taxes: Option[] }) {
+  const router = useRouter();
   const isEdit = !!initial?.id;
-  const action = isEdit ? updateCustomer.bind(null, initial!.id!) : createCustomer;
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (state && "ok" in state && !state.ok) toast.error(state.error);
-    if (state && "ok" in state && state.ok && isEdit) toast.success("Saved");
-  }, [state, isEdit]);
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    const fd = new FormData(e.currentTarget);
+    const res = isEdit ? await updateCustomer(initial!.id!, fd) : await createCustomer(fd);
+    if (!res.ok) {
+      setSaving(false);
+      toast.error(res.error);
+      return;
+    }
+    toast.success(isEdit ? "Customer updated" : "Customer created");
+    router.push("/customers");
+    router.refresh();
+  }
+
+  const pending = saving;
 
   return (
-    <form action={formAction} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+    <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
       <Field label="Code"><Input name="code" defaultValue={initial?.code ?? ""} placeholder="auto-generated" /></Field>
       <Field label="Currency"><Input name="currency" defaultValue={initial?.currency ?? "AED"} /></Field>
 
@@ -73,6 +87,7 @@ export function CustomerForm({ initial, taxes }: { initial?: CustomerValues; tax
 
       <div className="md:col-span-2 flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={pending}>
+          {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {pending ? "Saving…" : isEdit ? "Save changes" : "Create customer"}
         </Button>
       </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
-import { useEffect } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,19 +36,31 @@ type Props = {
 };
 
 export function ProductForm({ initial, uoms, taxes, categories, canViewCost }: Props) {
+  const router = useRouter();
   const isEdit = !!initial?.id;
-  const action = isEdit
-    ? updateProduct.bind(null, initial!.id!)
-    : createProduct;
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (state && "ok" in state && !state.ok) toast.error(state.error);
-    if (state && "ok" in state && state.ok && isEdit) toast.success("Saved");
-  }, [state, isEdit]);
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    const fd = new FormData(e.currentTarget);
+    const res = isEdit ? await updateProduct(initial!.id!, fd) : await createProduct(fd);
+    if (!res.ok) {
+      setSaving(false);
+      toast.error(res.error);
+      return;
+    }
+    toast.success(isEdit ? "Product updated" : "Product created");
+    // Go to the list so the record shows immediately; keep the spinner until
+    // navigation completes (the list has its own loading skeleton).
+    router.push("/products");
+    router.refresh();
+  }
+
+  const pending = saving;
 
   return (
-    <form action={formAction} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+    <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
       <Field label="SKU" required><Input name="sku" defaultValue={initial?.sku ?? ""} required /></Field>
       <Field label="Name" required><Input name="name" defaultValue={initial?.name ?? ""} required /></Field>
 
@@ -90,6 +103,7 @@ export function ProductForm({ initial, uoms, taxes, categories, canViewCost }: P
 
       <div className="md:col-span-2 flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={pending}>
+          {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {pending ? "Saving…" : isEdit ? "Save changes" : "Create product"}
         </Button>
       </div>

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { computeLine, computeTotals } from "@/lib/pricing";
 import { formatMoney } from "@/lib/utils";
 import { saveQuotation, confirmQuotation } from "./actions";
+import { QuickAddCustomer } from "@/components/quick-add/quick-add-customer";
+import { QuickAddProduct } from "@/components/quick-add/quick-add-product";
 
 type Opt = { id: string; label: string; extra?: Record<string, string | number | null> };
 type Line = {
@@ -66,10 +68,23 @@ const emptyLine = (): Line => ({
 
 const productMap = (products: Opt[]) => new Map(products.map((p) => [p.id, p]));
 
-export function QuotationForm({ initial, customers, products, uoms, taxes, canConfirm }: Props) {
+export function QuotationForm({
+  initial,
+  customers: customersInit,
+  products: productsInit,
+  uoms,
+  taxes,
+  canConfirm,
+}: Props) {
   const router = useRouter();
   const [pending, startTx] = useTransition();
   const [confirming, startConfirm] = useTransition();
+
+  // Options are local state so the "+ New …" quick-add can append to them.
+  const [customers, setCustomers] = useState(customersInit);
+  const [products, setProducts] = useState(productsInit);
+  const [customerAddOpen, setCustomerAddOpen] = useState(false);
+  const [productAddLine, setProductAddLine] = useState<number | null>(null);
 
   const [customerId, setCustomerId] = useState(initial?.customer_id ?? "");
   const [quoteDate, setQuoteDate] = useState(initial?.quote_date ?? new Date().toISOString().slice(0, 10));
@@ -191,15 +206,29 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="space-y-1.5 md:col-span-2">
           <Label>Customer <span className="text-destructive">*</span></Label>
-          <select
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            disabled={isReadOnly}
-          >
-            <option value="">— select customer —</option>
-            {customerOptions}
-          </select>
+          <div className="flex gap-2">
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              disabled={isReadOnly}
+            >
+              <option value="">— select customer —</option>
+              {customerOptions}
+            </select>
+            {!isReadOnly && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                title="Add new customer"
+                onClick={() => setCustomerAddOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
         <div className="space-y-1.5">
           <Label>Quote date</Label>
@@ -237,15 +266,29 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
               return (
                 <tr key={l.key} className="border-t">
                   <td className="p-1.5">
-                    <select
-                      value={l.product_id}
-                      onChange={(e) => pickProduct(i, e.target.value)}
-                      disabled={isReadOnly}
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                    >
-                      <option value="">—</option>
-                      {productOptions}
-                    </select>
+                    <div className="flex gap-1">
+                      <select
+                        value={l.product_id}
+                        onChange={(e) => pickProduct(i, e.target.value)}
+                        disabled={isReadOnly}
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="">—</option>
+                        {productOptions}
+                      </select>
+                      {!isReadOnly && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          title="Add new product"
+                          onClick={() => setProductAddLine(i)}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </td>
                   <td className="p-1.5">
                     <Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly} className="h-9" />
@@ -324,10 +367,40 @@ export function QuotationForm({ initial, customers, products, uoms, taxes, canCo
         )}
         {!isReadOnly && (
           <Button type="button" onClick={onSave} disabled={pending}>
+            {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {pending ? "Saving…" : initial?.id ? "Save changes" : "Create quotation"}
           </Button>
         )}
       </div>
+
+      <QuickAddCustomer
+        open={customerAddOpen}
+        onClose={() => setCustomerAddOpen(false)}
+        taxes={taxes}
+        onCreated={(item) => {
+          setCustomers((prev) => [...prev, { id: item.id, label: item.label, extra: item.extra }]);
+          setCustomerId(item.id);
+        }}
+      />
+      <QuickAddProduct
+        open={productAddLine !== null}
+        onClose={() => setProductAddLine(null)}
+        uoms={uoms}
+        taxes={taxes}
+        onCreated={(item) => {
+          setProducts((prev) => [...prev, { id: item.id, label: item.label, extra: item.extra }]);
+          if (productAddLine !== null) {
+            const desc = item.label.split(" — ").slice(1).join(" — ") || item.label;
+            updateLine(productAddLine, {
+              product_id: item.id,
+              description: desc,
+              unit_price: String(item.extra.sale_price ?? "0"),
+              uom_id: (item.extra.uom_id as string) ?? "",
+              tax_id: (item.extra.tax_id as string) ?? "",
+            });
+          }
+        }}
+      />
     </div>
   );
 }
