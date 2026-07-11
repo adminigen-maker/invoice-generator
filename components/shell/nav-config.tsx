@@ -57,12 +57,28 @@ const AREAS: { key: AreaKey; label: string; icon: React.ComponentType<{ classNam
   { key: "admin", label: "Admin", icon: Cog },
 ];
 
+/** Does the path belong to this href? Uses segment boundaries so that
+ *  "/settings" does NOT match "/settings/roles" (which would light up both). */
+function pathMatches(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+/** The single nav href that best matches the path (longest match wins), so
+ *  only ONE link is ever highlighted — the most specific one. */
+function bestMatchHref(pathname: string, items: NavItem[]): string {
+  let best = "";
+  for (const item of items) {
+    if (pathMatches(pathname, item.href) && item.href.length > best.length) best = item.href;
+  }
+  return best;
+}
+
 /** Which area does the current URL belong to? (longest matching href wins) */
 function areaForPath(pathname: string): AreaKey {
   let best: NavItem | null = null;
   for (const item of NAV) {
-    const match = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-    if (match && (!best || item.href.length > best.href.length)) best = item;
+    if (pathMatches(pathname, item.href) && (!best || item.href.length > best.href.length)) best = item;
   }
   return best?.area ?? "operations";
 }
@@ -81,6 +97,9 @@ export function SidebarContent({
   const pathname = usePathname();
   const permSet = new Set(permissions);
   const visible = NAV.filter((n) => !n.perm || permSet.has(n.perm));
+  // Only the single most-specific link is active (fixes /settings also
+  // highlighting when on /settings/roles).
+  const activeHref = bestMatchHref(pathname, visible);
 
   // Active area follows the current route, but the switcher can override it
   // until the next navigation.
@@ -111,7 +130,7 @@ export function SidebarContent({
             </div>
             <ul className="space-y-0.5">
               {items.map((item) => {
-                const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+                const active = item.href === activeHref;
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>
