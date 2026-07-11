@@ -118,6 +118,42 @@ export async function quickCreateCustomer(
   }
 }
 
+export async function setCustomerActive(
+  id: string,
+  active: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await requirePermission(P.sales.customerEdit);
+    const supabase = await createClient();
+    const { error } = await supabase.from("customer").update({ is_active: active }).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/customers");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: actionError(e, "edit customers") };
+  }
+}
+
+export async function deleteCustomer(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await requirePermission(P.sales.customerDelete);
+    const supabase = await createClient();
+    const { error } = await supabase.from("customer").delete().eq("id", id);
+    if (error) return { ok: false, error: friendlyDeleteError(error.message) };
+    revalidatePath("/customers");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: actionError(e, "delete customers") };
+  }
+}
+
+function friendlyDeleteError(message: string): string {
+  if (/foreign key|violates|referenced|23503/i.test(message)) {
+    return "Can't delete: this customer is used by other documents. Deactivate it instead.";
+  }
+  return message;
+}
+
 function actionError(e: unknown, action: string): string {
   if ((e as { code?: string })?.code === "PERMISSION_DENIED") {
     return `You don't have permission to ${action}.`;

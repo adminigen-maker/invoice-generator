@@ -10,18 +10,40 @@ import { Card } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { ListToolbar } from "@/components/list-toolbar";
+import { RowActions } from "@/components/row-actions";
+import { setCustomerActive, deleteCustomer } from "./actions";
+import { ilikeTerm } from "@/lib/list-query";
 
 export const dynamic = "force-dynamic";
 
-export default async function CustomersPage() {
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; view?: string }>;
+}) {
+  const { q, view = "active" } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
 
-  const { data: rows } = await supabase
+  let query = supabase
     .from("customer")
     .select("id, code, name, tax_registration_number, credit_limit, payment_terms_days, is_active")
     .order("name")
     .limit(200);
+
+  if (view === "active") query = query.eq("is_active", true);
+  else if (view === "inactive") query = query.eq("is_active", false);
+
+  const term = ilikeTerm(q);
+  if (term) query = query.or(`code.ilike.${term},name.ilike.${term},tax_registration_number.ilike.${term}`);
+
+  const { data: rows } = await query;
+
+  const canDeactivate = perms.has(P.sales.customerEdit);
+  const canDelete = perms.has(P.sales.customerDelete);
+  const showActions = canDeactivate || canDelete;
+  const colCount = 6 + (showActions ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -37,6 +59,8 @@ export default async function CustomersPage() {
         )}
       </div>
 
+      <ListToolbar searchPlaceholder="Search code, name or TRN…" />
+
       <Card>
         <Table>
           <TableHeader>
@@ -47,13 +71,14 @@ export default async function CustomersPage() {
               <TableHead className="text-right">Credit limit</TableHead>
               <TableHead>Payment terms</TableHead>
               <TableHead>Status</TableHead>
+              {showActions && <TableHead className="w-10" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  No customers yet.
+                <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
+                  {q ? `No customers match “${q}”.` : "No customers here."}
                 </TableCell>
               </TableRow>
             )}
@@ -71,6 +96,19 @@ export default async function CustomersPage() {
                 <TableCell>
                   {c.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
                 </TableCell>
+                {showActions && (
+                  <TableCell>
+                    <RowActions
+                      id={c.id}
+                      isActive={!!c.is_active}
+                      entityLabel="customer"
+                      canDeactivate={canDeactivate}
+                      canDelete={canDelete}
+                      setActive={setCustomerActive}
+                      remove={deleteCustomer}
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

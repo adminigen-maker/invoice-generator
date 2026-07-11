@@ -4,16 +4,34 @@ import { formatDate, formatMoney } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ListToolbar } from "@/components/list-toolbar";
+import { ilikeTerm } from "@/lib/list-query";
 
 export const dynamic = "force-dynamic";
 
-export default async function InvoicesPage() {
+const INACTIVE = "(cancelled,closed)";
+
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; view?: string }>;
+}) {
+  const { q, view = "active" } = await searchParams;
   const supabase = await createClient();
-  const { data: rows } = await supabase
+
+  let query = supabase
     .from("invoice")
     .select("id, number, invoice_date, due_date, status, total, amount_paid, balance, currency, customer:customer(name)")
     .order("invoice_date", { ascending: false })
     .limit(200);
+
+  if (view === "active") query = query.not("status", "in", INACTIVE);
+  else if (view === "inactive") query = query.in("status", ["cancelled", "closed"]);
+
+  const term = ilikeTerm(q);
+  if (term) query = query.or(`number.ilike.${term}`);
+
+  const { data: rows } = await query;
 
   return (
     <div className="space-y-4">
@@ -23,6 +41,9 @@ export default async function InvoicesPage() {
           Bills issued to customers. Post to lock; then record payments.
         </p>
       </div>
+
+      <ListToolbar searchPlaceholder="Search invoice number…" />
+
       <Card>
         <Table>
           <TableHeader>
@@ -40,7 +61,7 @@ export default async function InvoicesPage() {
             {(rows ?? []).length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No invoices yet.
+                  {q ? `No invoices match “${q}”.` : "No invoices here."}
                 </TableCell>
               </TableRow>
             )}

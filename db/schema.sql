@@ -1777,3 +1777,16 @@ create policy admin_write_company on public.company for update to authenticated
   using (public.has_permission('admin.company.edit'))
   with check (public.has_permission('admin.company.edit'));
 
+
+-- ## SOURCE: db/migrations/0017_customer_delete_policy.sql
+
+-- =====================================================================
+-- 0017 · Allow deleting customers (gated by sales.customer.delete)
+--
+-- customer had insert/update/select policies but no DELETE policy, so the
+-- new row "Delete" action was blocked. product already has a delete policy.
+-- =====================================================================
+drop policy if exists customer_delete on public.customer;
+create policy customer_delete on public.customer for delete to authenticated
+  using (public.has_permission('sales.customer.delete') and public.scope_allows(created_by, 'sales'));
+

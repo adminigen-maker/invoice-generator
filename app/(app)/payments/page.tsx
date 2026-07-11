@@ -2,16 +2,29 @@ import { createClient } from "@/lib/db/supabase-server";
 import { formatDate, formatMoney } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ListToolbar } from "@/components/list-toolbar";
+import { ilikeTerm } from "@/lib/list-query";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaymentsPage() {
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
   const supabase = await createClient();
-  const { data: rows } = await supabase
+
+  let query = supabase
     .from("payment")
     .select("id, number, payment_date, method, reference, amount, amount_unallocated, currency, customer:customer(name)")
     .order("payment_date", { ascending: false })
     .limit(200);
+
+  const term = ilikeTerm(q);
+  if (term) query = query.or(`number.ilike.${term},reference.ilike.${term}`);
+
+  const { data: rows } = await query;
 
   return (
     <div className="space-y-4">
@@ -19,6 +32,9 @@ export default async function PaymentsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
         <p className="text-sm text-muted-foreground">Receipts from customers, allocated across invoices</p>
       </div>
+
+      <ListToolbar showViews={false} searchPlaceholder="Search number or reference…" />
+
       <Card>
         <Table>
           <TableHeader>
@@ -36,7 +52,7 @@ export default async function PaymentsPage() {
             {(rows ?? []).length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No payments yet.
+                  {q ? `No payments match “${q}”.` : "No payments here."}
                 </TableCell>
               </TableRow>
             )}

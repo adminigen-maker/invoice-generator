@@ -4,16 +4,34 @@ import { formatDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ListToolbar } from "@/components/list-toolbar";
+import { ilikeTerm } from "@/lib/list-query";
 
 export const dynamic = "force-dynamic";
 
-export default async function DeliveryNotesPage() {
+const INACTIVE = "(cancelled,closed)";
+
+export default async function DeliveryNotesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; view?: string }>;
+}) {
+  const { q, view = "active" } = await searchParams;
   const supabase = await createClient();
-  const { data: rows } = await supabase
+
+  let query = supabase
     .from("delivery_note")
     .select("id, number, delivery_date, status, posted_at, sales_order:sales_order(number, customer:customer(name))")
     .order("delivery_date", { ascending: false })
     .limit(200);
+
+  if (view === "active") query = query.not("status", "in", INACTIVE);
+  else if (view === "inactive") query = query.in("status", ["cancelled", "closed"]);
+
+  const term = ilikeTerm(q);
+  if (term) query = query.or(`number.ilike.${term}`);
+
+  const { data: rows } = await query;
 
   return (
     <div className="space-y-4">
@@ -23,6 +41,9 @@ export default async function DeliveryNotesPage() {
           Goods issue documents. Posting a delivery note deducts stock.
         </p>
       </div>
+
+      <ListToolbar searchPlaceholder="Search delivery number…" />
+
       <Card>
         <Table>
           <TableHeader>
@@ -39,7 +60,7 @@ export default async function DeliveryNotesPage() {
             {(rows ?? []).length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  No delivery notes yet.
+                  {q ? `No delivery notes match “${q}”.` : "No delivery notes here."}
                 </TableCell>
               </TableRow>
             )}

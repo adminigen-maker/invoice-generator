@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/db/supabase-server";
 import { requirePermission } from "@/lib/rbac/can";
@@ -127,10 +126,39 @@ function actionError(e: unknown, action: string): string {
   return (e as Error)?.message ?? "Something went wrong";
 }
 
-export async function deleteProduct(id: string) {
-  await requirePermission(P.inventory.productDelete);
-  const supabase = await createClient();
-  await supabase.from("product").delete().eq("id", id);
-  revalidatePath("/products");
-  redirect("/products");
+export async function setProductActive(
+  id: string,
+  active: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await requirePermission(P.inventory.productEdit);
+    const supabase = await createClient();
+    const { error } = await supabase.from("product").update({ is_active: active }).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/products");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: actionError(e, "edit products") };
+  }
+}
+
+export async function deleteProduct(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await requirePermission(P.inventory.productDelete);
+    const supabase = await createClient();
+    const { error } = await supabase.from("product").delete().eq("id", id);
+    if (error) return { ok: false, error: friendlyDeleteError(error.message) };
+    revalidatePath("/products");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: actionError(e, "delete products") };
+  }
+}
+
+// Postgres FK-violation (23503) means the row is referenced by documents.
+function friendlyDeleteError(message: string): string {
+  if (/foreign key|violates|referenced|23503/i.test(message)) {
+    return "Can't delete: this record is used by other documents. Deactivate it instead.";
+  }
+  return message;
 }

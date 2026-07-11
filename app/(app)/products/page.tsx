@@ -11,20 +11,41 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
+import { ListToolbar } from "@/components/list-toolbar";
+import { RowActions } from "@/components/row-actions";
+import { setProductActive, deleteProduct } from "./actions";
+import { ilikeTerm } from "@/lib/list-query";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProductsPage() {
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; view?: string }>;
+}) {
+  const { q, view = "active" } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
 
-  const { data: rows } = await supabase
+  let query = supabase
     .from("product")
     .select("id, sku, name, sale_price, cost_price, is_active, uom:unit_of_measure(code), category:product_category(name)")
     .order("name")
     .limit(200);
 
+  if (view === "active") query = query.eq("is_active", true);
+  else if (view === "inactive") query = query.eq("is_active", false);
+
+  const term = ilikeTerm(q);
+  if (term) query = query.or(`sku.ilike.${term},name.ilike.${term}`);
+
+  const { data: rows } = await query;
   const masked = (await maskFields("product", rows ?? [])) as typeof rows;
+
+  const canDeactivate = perms.has(P.inventory.productEdit);
+  const canDelete = perms.has(P.inventory.productDelete);
+  const showActions = canDeactivate || canDelete;
+  const colCount = 7 + (perms.has(P.inventory.productViewCost) ? 1 : 0) + (showActions ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -40,6 +61,8 @@ export default async function ProductsPage() {
         )}
       </div>
 
+      <ListToolbar searchPlaceholder="Search SKU or name…" />
+
       <Card>
         <Table>
           <TableHeader>
@@ -53,14 +76,15 @@ export default async function ProductsPage() {
                 <TableHead className="text-right">Cost price</TableHead>
               )}
               <TableHead>Status</TableHead>
-              <TableHead />
+              {showActions && <TableHead className="w-10" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(masked ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                  No products yet. {perms.has(P.inventory.productCreate) && (
+                <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
+                  {q ? `No products match “${q}”.` : "No products here. "}
+                  {!q && perms.has(P.inventory.productCreate) && (
                     <Link className="underline" href="/products/new">Create the first one</Link>
                   )}
                 </TableCell>
@@ -83,7 +107,19 @@ export default async function ProductsPage() {
                 <TableCell>
                   {p.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
                 </TableCell>
-                <TableCell />
+                {showActions && (
+                  <TableCell>
+                    <RowActions
+                      id={p.id}
+                      isActive={!!p.is_active}
+                      entityLabel="product"
+                      canDeactivate={canDeactivate}
+                      canDelete={canDelete}
+                      setActive={setProductActive}
+                      remove={deleteProduct}
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

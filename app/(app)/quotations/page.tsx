@@ -10,18 +10,35 @@ import { StatusBadge } from "@/components/status-badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { ListToolbar } from "@/components/list-toolbar";
+import { ilikeTerm } from "@/lib/list-query";
 
 export const dynamic = "force-dynamic";
 
-export default async function QuotationsPage() {
+const INACTIVE = "(cancelled,closed)";
+
+export default async function QuotationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; view?: string }>;
+}) {
+  const { q, view = "active" } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
 
-  const { data: rows } = await supabase
+  let query = supabase
     .from("quotation")
     .select("id, number, quote_date, valid_until, status, total, currency, customer:customer(name)")
     .order("quote_date", { ascending: false })
     .limit(200);
+
+  if (view === "active") query = query.not("status", "in", INACTIVE);
+  else if (view === "inactive") query = query.in("status", ["cancelled", "closed"]);
+
+  const term = ilikeTerm(q);
+  if (term) query = query.or(`number.ilike.${term}`);
+
+  const { data: rows } = await query;
 
   return (
     <div className="space-y-4">
@@ -36,6 +53,8 @@ export default async function QuotationsPage() {
           </Button>
         )}
       </div>
+
+      <ListToolbar searchPlaceholder="Search quotation number…" />
 
       <Card>
         <Table>
@@ -53,22 +72,22 @@ export default async function QuotationsPage() {
             {(rows ?? []).length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  No quotations yet.
+                  {q ? `No quotations match “${q}”.` : "No quotations here."}
                 </TableCell>
               </TableRow>
             )}
-            {(rows ?? []).map((q) => (
-              <TableRow key={q.id}>
+            {(rows ?? []).map((quote) => (
+              <TableRow key={quote.id}>
                 <TableCell className="font-mono text-xs">
-                  <Link href={`/quotations/${q.id}`} className="hover:underline">{q.number}</Link>
+                  <Link href={`/quotations/${quote.id}`} className="hover:underline">{quote.number}</Link>
                 </TableCell>
                 <TableCell className="font-medium">
-                  {(q.customer as { name?: string } | null)?.name ?? "—"}
+                  {(quote.customer as { name?: string } | null)?.name ?? "—"}
                 </TableCell>
-                <TableCell>{formatDate(q.quote_date)}</TableCell>
-                <TableCell>{formatDate(q.valid_until)}</TableCell>
-                <TableCell><StatusBadge status={q.status} /></TableCell>
-                <TableCell className="text-right font-mono">{formatMoney(q.total, q.currency)}</TableCell>
+                <TableCell>{formatDate(quote.quote_date)}</TableCell>
+                <TableCell>{formatDate(quote.valid_until)}</TableCell>
+                <TableCell><StatusBadge status={quote.status} /></TableCell>
+                <TableCell className="text-right font-mono">{formatMoney(quote.total, quote.currency)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
