@@ -66,18 +66,21 @@ Before creating documents, add the things you sell and the people you sell to.
 The confirmed commitment. From here you can create the delivery and the bill.
 - Create a **Delivery Note** to ship goods, and/or an **Invoice** to bill.
 
-### Step 3 · Delivery Note (Operations → Delivery Notes) — *optional*
-Delivery notes are optional in this setup (stock is issued by the invoice — see
-Step 4). Use them only if you want a separate goods‑issue document.
-> ⚠️ Posting a delivery note **also** deducts stock. To avoid deducting twice,
-> **don't post a delivery note for goods you're already issuing via the invoice.**
+### Step 3 · Delivery Note (Operations → Delivery Notes)
+1. Created from a Sales Order; lists the goods to ship.
+2. **Post** the delivery note → this **deducts stock** (creates stock movements) and locks the note.
+
+> ⚠️ A **posted** delivery note **cannot be deleted** — the system blocks it to keep inventory correct.
 
 ### Step 4 · Invoice (Operations → Invoices)
 1. Created from a Sales Order (or standalone).
 2. **Post** the invoice → it becomes a final, locked tax invoice (status *Invoiced*)
-   **and deducts stock** for each stockable line (on‑hand drops). This is the stock
-   issue point in the invoice‑only workflow.
+   **and deducts stock** for its items.
 3. **Print / PDF** → produces the UAE tax‑invoice PDF (company details, TRN, 5% VAT, bank details).
+
+> **Stock is deducted exactly once.** If a line was already shipped on a posted
+> **delivery note**, the invoice skips it (it won't double‑count). So you can use
+> either flow — deliver‑then‑invoice, or invoice directly — and on‑hand stays correct.
 
 ### Step 5 · Payment (Operations → Payments)
 1. Open the invoice and **Record payment** — enter amount, date, method, reference.
