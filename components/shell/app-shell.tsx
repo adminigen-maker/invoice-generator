@@ -7,6 +7,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { InstallButton } from "@/components/install-button";
 import { SidebarContent } from "./nav-config";
 import { MobileNav } from "./mobile-nav";
 import { SignOutButton } from "./sign-out-button";
@@ -122,7 +123,10 @@ export function AppShell({
               <span className="hidden lg:inline">{userEmail}</span>
             </div>
           </div>
-          <SignOutButton />
+          <div className="flex items-center gap-2">
+            <InstallButton />
+            <SignOutButton />
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-muted/20">
           {LIVE_ROUTES.has(pathname) && <AutoRefresh intervalMs={30000} />}
