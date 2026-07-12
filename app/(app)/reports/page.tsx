@@ -6,6 +6,7 @@ import { formatMoney, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportsToolbar } from "@/components/reports-toolbar";
+import { RevenueBarChart, AgingDonut, RankBarChart, VatPie } from "@/components/charts/report-charts";
 
 export const dynamic = "force-dynamic";
 
@@ -128,14 +129,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   }
 
   const aging = [
-    { label: "Not yet due", value: r.ar_aging.not_due, color: "bg-emerald-500" },
-    { label: "1–30 days", value: r.ar_aging.d1_30, color: "bg-amber-500" },
-    { label: "31–60 days", value: r.ar_aging.d31_60, color: "bg-orange-500" },
-    { label: "60+ days", value: r.ar_aging.d60_plus, color: "bg-red-500" },
+    { label: "Not yet due", value: Number(r.ar_aging.not_due), color: "#10b981" },
+    { label: "1–30 days", value: Number(r.ar_aging.d1_30), color: "#f59e0b" },
+    { label: "31–60 days", value: Number(r.ar_aging.d31_60), color: "#f97316" },
+    { label: "60+ days", value: Number(r.ar_aging.d60_plus), color: "#ef4444" },
   ];
-  const agingTotal = aging.reduce((s, a) => s + Number(a.value), 0);
-  const maxMonth = Math.max(1, ...r.revenue_by_month.map((m) => Number(m.revenue)));
-  const maxProduct = Math.max(1, ...r.top_products.map((p) => Number(p.revenue)));
   const netVat = vat ? Number(vat.output.vat) - Number(vat.input.vat) : 0;
 
   return (
@@ -161,25 +159,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Accounts receivable aging</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {agingTotal === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing outstanding — all invoices are paid.</p>
-            ) : (
-              aging.map((a) => {
-                const pct = agingTotal > 0 ? (Number(a.value) / agingTotal) * 100 : 0;
-                return (
-                  <div key={a.label} className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{a.label}</span>
-                      <span className="font-mono">{formatMoney(a.value)}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className={`h-full rounded-full ${a.color}`} style={{ width: `${Math.max(pct, a.value > 0 ? 3 : 0)}%` }} />
-                    </div>
-                  </div>
-                );
-              })
-            )}
+          <CardContent>
+            <AgingDonut data={aging} />
           </CardContent>
         </Card>
 
@@ -189,21 +170,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <CardTitle className="text-base">Revenue — last 12 months</CardTitle>
           </CardHeader>
           <CardContent>
-            {r.revenue_by_month.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No invoices in the last 12 months.</p>
-            ) : (
-              <div className="space-y-2">
-                {r.revenue_by_month.map((m) => (
-                  <div key={m.month} className="flex items-center gap-3 text-sm">
-                    <span className="w-16 shrink-0 text-muted-foreground font-mono text-xs">{m.month}</span>
-                    <div className="flex-1 h-4 rounded bg-muted overflow-hidden">
-                      <div className="h-full rounded bg-primary" style={{ width: `${(Number(m.revenue) / maxMonth) * 100}%` }} />
-                    </div>
-                    <span className="w-24 shrink-0 text-right font-mono text-xs">{formatMoney(m.revenue)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <RevenueBarChart data={r.revenue_by_month} currency="AED" />
           </CardContent>
         </Card>
       </div>
@@ -213,28 +180,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Top products by revenue</CardTitle></CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Product</TableHead><TableHead className="text-right">Qty</TableHead><TableHead className="text-right">Revenue</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {r.top_products.length === 0 && (
-                  <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-6">No sales yet.</TableCell></TableRow>
-                )}
-                {r.top_products.map((p, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">
-                      {p.name}
-                      <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden max-w-[180px]">
-                        <div className="h-full rounded-full bg-sky-500" style={{ width: `${(Number(p.revenue) / maxProduct) * 100}%` }} />
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">{Number(p.qty).toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatMoney(p.revenue)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <RankBarChart data={r.top_products.map((p) => ({ name: p.name, value: Number(p.revenue) }))} currency="AED" color="#0ea5e9" />
           </CardContent>
         </Card>
 
@@ -242,23 +188,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Top customers by revenue</CardTitle></CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Customer</TableHead><TableHead className="text-right">Invoices</TableHead><TableHead className="text-right">Revenue</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {r.top_customers.length === 0 && (
-                  <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-6">No sales yet.</TableCell></TableRow>
-                )}
-                {r.top_customers.map((c, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-right font-mono">{c.invoices}</TableCell>
-                    <TableCell className="text-right font-mono">{formatMoney(c.revenue)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <RankBarChart data={r.top_customers.map((c) => ({ name: c.name, value: Number(c.revenue) }))} currency="AED" color="#6366f1" />
           </CardContent>
         </Card>
       </div>
@@ -288,31 +218,37 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               </div>
             </div>
 
-            <div>
-              <div className="text-sm font-medium mb-2">Output VAT by rate</div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Rate</TableHead>
-                    <TableHead className="text-right">Rate %</TableHead>
-                    <TableHead className="text-right">Taxable</TableHead>
-                    <TableHead className="text-right">VAT</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {vat.by_rate.length === 0 && (
-                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>
-                  )}
-                  {vat.by_rate.map((b, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-mono text-xs">{b.code}</TableCell>
-                      <TableCell className="text-right font-mono">{Number(b.rate).toFixed(2)}%</TableCell>
-                      <TableCell className="text-right font-mono">{formatMoney(b.taxable)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatMoney(b.vat)}</TableCell>
+            <div className="grid lg:grid-cols-2 gap-4 items-start">
+              <div>
+                <div className="text-sm font-medium mb-2">Output VAT by rate</div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Rate</TableHead>
+                      <TableHead className="text-right">Rate %</TableHead>
+                      <TableHead className="text-right">Taxable</TableHead>
+                      <TableHead className="text-right">VAT</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {vat.by_rate.length === 0 && (
+                      <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>
+                    )}
+                    {vat.by_rate.map((b, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-mono text-xs">{b.code}</TableCell>
+                        <TableCell className="text-right font-mono">{Number(b.rate).toFixed(2)}%</TableCell>
+                        <TableCell className="text-right font-mono">{formatMoney(b.taxable)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatMoney(b.vat)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div>
+                <div className="text-sm font-medium mb-2">Sales by tax rate</div>
+                <VatPie data={vat.by_rate} />
+              </div>
             </div>
 
             {vat.invoices.length > 0 && (
