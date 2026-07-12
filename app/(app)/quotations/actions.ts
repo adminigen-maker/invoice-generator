@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/db/supabase-server";
 import { requirePermission } from "@/lib/rbac/can";
@@ -237,7 +236,9 @@ export async function confirmQuotation(id: string): Promise<ActionResult> {
 
     revalidatePath("/quotations");
     revalidatePath("/sales-orders");
-    redirect(`/sales-orders/${so.id}`);
+    // Return the new SO id and let the client navigate — calling redirect() here
+    // would throw NEXT_REDIRECT and be swallowed by this catch (shown as an error).
+    return { ok: true, id: so.id };
   } catch (e) {
     if ((e as { code?: string }).code === "PERMISSION_DENIED")
       return { ok: false, error: "You don't have permission to confirm quotations." };

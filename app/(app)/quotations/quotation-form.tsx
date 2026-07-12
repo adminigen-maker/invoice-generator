@@ -195,7 +195,13 @@ export function QuotationForm({
     }
     startConfirm(async () => {
       const res = await confirmQuotation(initial.id);
-      if (res && !res.ok) toast.error(res.error);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Sales order created");
+      router.push(`/sales-orders/${res.id}`);
+      router.refresh();
     });
   }
 
@@ -361,7 +367,12 @@ export function QuotationForm({
 
       <div className="flex justify-end gap-2">
         {initial?.id && canConfirm && !isReadOnly && (
-          <Button variant="outline" type="button" onClick={onConfirm} disabled={confirming}>
+          <Button
+            type="button"
+            onClick={onConfirm}
+            disabled={confirming}
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+          >
             {confirming ? "Confirming…" : "Confirm → Sales Order"}
           </Button>
         )}
