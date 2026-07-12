@@ -4,7 +4,6 @@ import { can } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 import { QuotationForm } from "../quotation-form";
 import { StatusBadge } from "@/components/status-badge";
-import { StatusOverride } from "@/components/status-override";
 import { PdfButton } from "@/components/pdf-button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -50,8 +49,6 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
           <PdfButton url={`/quotations/${id}/pdf`} filename={`${quotation.number}.pdf`} />
         </div>
       </div>
-
-      {(await can(P.admin.statusOverride)) && <StatusOverride entity="quotation" id={quotation.id} current={quotation.status} />}
 
       <Card>
         <CardContent className="pt-6">

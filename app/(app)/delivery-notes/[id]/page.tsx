@@ -6,7 +6,6 @@ import { P } from "@/lib/rbac/permissions";
 import { formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
-import { StatusOverride } from "@/components/status-override";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DocMetaGrid, DocStatGrid } from "@/components/doc-detail";
 import { PdfButton } from "@/components/pdf-button";
@@ -29,7 +28,7 @@ export default async function DeliveryNotePage({ params }: { params: Promise<{ i
     .maybeSingle();
   if (!dn) return notFound();
 
-  const [canPost, canOverride] = await Promise.all([can(P.inventory.deliveryPost), can(P.admin.statusOverride)]);
+  const canPost = await can(P.inventory.deliveryPost);
   const posted = !!dn.posted_at;
   const so = dn.sales_order as { id?: string; number?: string; customer?: { name?: string } | null } | null;
   const lines = (dn.lines ?? []) as Line[];
@@ -52,8 +51,6 @@ export default async function DeliveryNotePage({ params }: { params: Promise<{ i
           {!posted && canPost && <PostDeliveryButton id={dn.id} />}
         </div>
       </div>
-
-      {canOverride && <StatusOverride entity="delivery_note" id={dn.id} current={dn.status} />}
 
       <DocMetaGrid
         items={[

@@ -7,14 +7,13 @@ import { formatDate, formatMoney } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
-import { StatusOverride } from "@/components/status-override";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PostInvoiceButton, RecordPaymentForm, CancelInvoiceButton } from "./client-actions";
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const [{ data: inv }, canPost, canPay, canCancel, canOverride] = await Promise.all([
+  const [{ data: inv }, canPost, canPay, canCancel] = await Promise.all([
     supabase.from("invoice").select(`
       *,
       customer:customer(name, code, tax_registration_number),
@@ -25,7 +24,6 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
     can(P.invoice.post),
     can(P.invoice.paymentCreate),
     can(P.invoice.edit),
-    can(P.admin.statusOverride),
   ]);
   if (!inv) return notFound();
 
@@ -59,8 +57,6 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           {isDraft && canCancel && <CancelInvoiceButton id={inv.id} />}
         </div>
       </div>
-
-      {canOverride && <StatusOverride entity="invoice" id={inv.id} current={inv.status} />}
 
       {/* Meta row */}
       <Card>

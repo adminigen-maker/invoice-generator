@@ -5,7 +5,6 @@ import { P } from "@/lib/rbac/permissions";
 import { formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
-import { StatusOverride } from "@/components/status-override";
 import { PurchaseOrderForm } from "../po-form";
 import { PoActions } from "./po-actions";
 
@@ -51,8 +50,6 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           canCancel={perms.has(P.procurement.poCancel)}
         />
       </div>
-
-      {perms.has(P.admin.statusOverride) && <StatusOverride entity="purchase_order" id={po.id} current={po.status} />}
 
       <Card>
         <CardContent className="pt-6">
