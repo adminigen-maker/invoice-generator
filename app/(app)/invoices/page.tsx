@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/db/supabase-server";
 import { getPermissions } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
@@ -41,15 +42,26 @@ export default async function InvoicesPage({
 
   const canCancel = perms.has(P.invoice.edit);
   const canDelete = perms.has(P.invoice.void);
+  const canCreate = perms.has(P.invoice.create);
   const showActions = canCancel || canDelete;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Invoices</h1>
-        <p className="text-sm text-muted-foreground">
-          Bills issued to customers. Post to lock; then record payments.
-        </p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Invoices</h1>
+          <p className="text-sm text-muted-foreground">
+            Bills issued to customers. Post to lock; then record payments.
+          </p>
+        </div>
+        {canCreate && (
+          <Link
+            href="/invoices/new"
+            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 h-10 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />New invoice
+          </Link>
+        )}
       </div>
 
       <ListToolbar searchPlaceholder="Search invoice number…" />
