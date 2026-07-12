@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { InstallButton } from "@/components/install-button";
 import { SidebarContent } from "./nav-config";
 import { MobileNav } from "./mobile-nav";
 import { SignOutButton } from "./sign-out-button";
@@ -126,7 +125,6 @@ export function AppShell({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <InstallButton />
             <SignOutButton />
           </div>
         </header>

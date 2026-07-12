@@ -37,12 +37,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/auth") ||
     pathname.startsWith("/api") || // API routes handle their own auth (e.g. cron keep-alive)
     pathname.startsWith("/_next") ||
-    // PWA + static assets must be reachable without a session so the app is
-    // installable and the icons/manifest/service worker load on the login page.
-    pathname === "/manifest.webmanifest" ||
-    pathname === "/sw.js" ||
-    pathname === "/offline.html" ||
-    /\.(png|jpe?g|gif|webp|svg|ico|webmanifest|txt|xml)$/.test(pathname);
+    // Static assets (favicons, images) load without a session, e.g. on /login.
+    /\.(png|jpe?g|gif|webp|svg|ico|txt|xml)$/.test(pathname);
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

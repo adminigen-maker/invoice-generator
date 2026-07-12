@@ -20,7 +20,7 @@ paid. It follows the natural business flow:
 
 ## 2. Find your way around
 
-- **Top bar** — who you're signed in as, an **Install app** button (see [§9](#9-install-it-as-an-app)), and **Sign out**.
+- **Top bar** — who you're signed in as, and **Sign out**.
 - **Sidebar** — your menu. Collapse it with the toggle (top‑left) to a slim **icon rail**; the icons stay visible.
 - **Areas** — the menu is grouped into three areas. Switch with the **Change area** button at the bottom of the sidebar:
   - **Operations** — Dashboard, Quotations, Sales Orders, Delivery Notes, Invoices, Payments
@@ -144,20 +144,7 @@ limits reference.
 
 ---
 
-## 9. Install it as an app
-
-The app is a **PWA** — you can install it like a native app.
-
-- **Android / Chrome / Edge (desktop)** — click **Install app** in the top bar, or the browser's install icon in the address bar, then confirm.
-- **iPhone / iPad (Safari)** — tap the **Share** button → **Add to Home Screen** → **Add**.
-
-Once installed it opens in its own window (no browser bar) and gets its own icon.
-It still needs an internet connection for live data; if you open it offline you'll
-see a friendly “You're offline” screen.
-
----
-
-## 10. Good to know
+## 9. Good to know
 
 - **Idle / left open** — list pages auto‑refresh every 30 seconds and when you return to the tab, so data stays current. Long‑running edit forms are not interrupted.
 - **The database never sleeps** — the project is on Supabase's Free tier, which pauses a project after ~7 days of no activity. A daily automated ping keeps it awake, so the app is always ready.
