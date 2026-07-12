@@ -295,6 +295,11 @@ export function QuotationForm({
                         </Button>
                       )}
                     </div>
+                    {l.product_id && prodMap.get(l.product_id)?.extra?.stock != null && (
+                      <div className={`text-[11px] mt-1 ${Number(prodMap.get(l.product_id)!.extra!.stock) <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        In stock: {Number(prodMap.get(l.product_id)!.extra!.stock).toFixed(2)}
+                      </div>
+                    )}
                   </td>
                   <td className="p-1.5">
                     <Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly} className="h-9" />

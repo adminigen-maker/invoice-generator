@@ -17,6 +17,7 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
     { data: products },
     { data: uoms },
     { data: taxes },
+    { data: stock },
   ] = await Promise.all([
     supabase.from("quotation")
       .select("*, lines:quotation_line(product_id, description, quantity, uom_id, unit_price, discount_pct, tax_id, sequence)")
@@ -26,7 +27,9 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
     supabase.from("product").select("id, sku, name, sale_price, uom_id, tax_id").order("name"),
     supabase.from("unit_of_measure").select("id, code").order("code"),
     supabase.from("tax_rate").select("id, code, name, rate").order("code"),
+    supabase.rpc("stock_on_hand"),
   ]);
+  const stockMap = new Map(((stock as { product_id: string; on_hand: number }[] | null) ?? []).map((s) => [s.product_id, Number(s.on_hand)]));
 
   if (!quotation) return notFound();
   const lines = (quotation.lines ?? []).sort(
@@ -65,7 +68,7 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
             products={(products ?? []).map((p) => ({
               id: p.id,
               label: `${p.sku} — ${p.name}`,
-              extra: { sale_price: p.sale_price, uom_id: p.uom_id, tax_id: p.tax_id },
+              extra: { sale_price: p.sale_price, uom_id: p.uom_id, tax_id: p.tax_id, stock: stockMap.get(p.id) ?? null },
             }))}
             uoms={(uoms ?? []).map((u) => ({ id: u.id, label: u.code }))}
             taxes={(taxes ?? []).map((t) => ({ id: t.id, label: `${t.code} (${Number(t.rate).toFixed(2)}%)`, extra: { rate: t.rate } }))}
