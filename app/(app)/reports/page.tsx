@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/db/supabase-server";
 import { can } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
-import { formatMoney } from "@/lib/utils";
+import { formatMoney, formatDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportsToolbar } from "@/components/reports-toolbar";
@@ -17,7 +17,14 @@ type Reports = {
   revenue_by_month: { month: string; revenue: number }[];
 };
 
-function toCsv(r: Reports, from?: string, to?: string): string {
+type Vat = {
+  output: { taxable: number; vat: number; count: number };
+  input: { taxable: number; vat: number; count: number };
+  by_rate: { code: string; rate: number; taxable: number; vat: number }[];
+  invoices: { number: string; invoice_date: string; customer: string; taxable: number; vat: number; total: number }[];
+};
+
+function toCsv(r: Reports, vat: Vat | null, from?: string, to?: string): string {
   const esc = (v: unknown) => {
     const s = String(v ?? "");
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -26,6 +33,17 @@ function toCsv(r: Reports, from?: string, to?: string): string {
   lines.push(`Invoice UAE — Report`);
   lines.push(`Period,${from || "all time"},${to || "today"}`);
   lines.push("");
+  if (vat) {
+    const net = Number(vat.output.vat) - Number(vat.input.vat);
+    lines.push("VAT summary,Taxable,VAT");
+    lines.push(`Output VAT (sales),${vat.output.taxable},${vat.output.vat}`);
+    lines.push(`Input VAT (purchases),${vat.input.taxable},${vat.input.vat}`);
+    lines.push(`Net VAT payable,,${net}`);
+    lines.push("");
+    lines.push("VAT by rate,Rate %,Taxable,VAT");
+    vat.by_rate.forEach((b) => lines.push(`${esc(b.code)},${Number(b.rate)},${b.taxable},${b.vat}`));
+    lines.push("");
+  }
   lines.push("Totals");
   lines.push(`Invoices,${r.totals.invoice_count}`);
   lines.push(`Revenue,${r.totals.revenue}`);
@@ -54,8 +72,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const { from, to } = await searchParams;
 
   const supabase = await createClient();
-  const { data } = await supabase.rpc("reports_summary", { from_date: from ?? null, to_date: to ?? null });
+  const [{ data }, { data: vatData }] = await Promise.all([
+    supabase.rpc("reports_summary", { from_date: from ?? null, to_date: to ?? null }),
+    supabase.rpc("vat_report", { from_date: from ?? null, to_date: to ?? null }),
+  ]);
   const r = (data as Reports | null) ?? null;
+  const vat = (vatData as Vat | null) ?? null;
 
   if (!r) {
     return (
@@ -75,6 +97,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const agingTotal = aging.reduce((s, a) => s + Number(a.value), 0);
   const maxMonth = Math.max(1, ...r.revenue_by_month.map((m) => Number(m.revenue)));
   const maxProduct = Math.max(1, ...r.top_products.map((p) => Number(p.revenue)));
+  const netVat = vat ? Number(vat.output.vat) - Number(vat.input.vat) : 0;
 
   return (
     <div className="space-y-4 max-w-6xl">
@@ -83,7 +106,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <p className="text-sm text-muted-foreground">Sales, receivables and product performance. Filter by date and export.</p>
       </div>
 
-      <ReportsToolbar csv={toCsv(r, from, to)} filename={`report-${from || "all"}-${to || "today"}.csv`} />
+      <ReportsToolbar csv={toCsv(r, vat, from, to)} filename={`report-${from || "all"}-${to || "today"}.csv`} />
 
       {/* Headline numbers */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -200,6 +223,93 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </CardContent>
         </Card>
       </div>
+
+      {/* VAT summary (UAE) */}
+      {vat && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">VAT summary (UAE)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-lg border p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Output VAT · sales</div>
+                <div className="mt-1 text-2xl font-semibold font-mono">{formatMoney(vat.output.vat)}</div>
+                <div className="text-xs text-muted-foreground mt-1">Taxable {formatMoney(vat.output.taxable)} · {vat.output.count} inv.</div>
+              </div>
+              <div className="rounded-lg border p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Input VAT · purchases</div>
+                <div className="mt-1 text-2xl font-semibold font-mono">{formatMoney(vat.input.vat)}</div>
+                <div className="text-xs text-muted-foreground mt-1">Taxable {formatMoney(vat.input.taxable)} · {vat.input.count} PO</div>
+              </div>
+              <div className="rounded-lg border p-4 bg-muted/30">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Net VAT payable</div>
+                <div className={`mt-1 text-2xl font-semibold font-mono ${netVat > 0 ? "text-destructive" : "text-emerald-600"}`}>{formatMoney(netVat)}</div>
+                <div className="text-xs text-muted-foreground mt-1">Output − Input</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm font-medium mb-2">Output VAT by rate</div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rate</TableHead>
+                    <TableHead className="text-right">Rate %</TableHead>
+                    <TableHead className="text-right">Taxable</TableHead>
+                    <TableHead className="text-right">VAT</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {vat.by_rate.length === 0 && (
+                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>
+                  )}
+                  {vat.by_rate.map((b, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-xs">{b.code}</TableCell>
+                      <TableCell className="text-right font-mono">{Number(b.rate).toFixed(2)}%</TableCell>
+                      <TableCell className="text-right font-mono">{formatMoney(b.taxable)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatMoney(b.vat)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {vat.invoices.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-sm font-medium select-none">
+                  Invoice detail ({vat.invoices.length}) <span className="text-muted-foreground font-normal">— click to expand</span>
+                </summary>
+                <div className="mt-2 max-h-96 overflow-y-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Invoice</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Taxable</TableHead>
+                        <TableHead className="text-right">VAT</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {vat.invoices.map((iv, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-mono text-xs">{iv.number}</TableCell>
+                          <TableCell>{iv.customer}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(iv.invoice_date)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatMoney(iv.taxable)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatMoney(iv.vat)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </details>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
