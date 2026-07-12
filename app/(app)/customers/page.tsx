@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { ListToolbar } from "@/components/list-toolbar";
 import { RowActions } from "@/components/row-actions";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { setCustomerActive, deleteCustomer } from "./actions";
 import { ilikeTerm } from "@/lib/list-query";
 
@@ -43,7 +44,18 @@ export default async function CustomersPage({
   const canDeactivate = perms.has(P.sales.customerEdit);
   const canDelete = perms.has(P.sales.customerDelete);
   const showActions = canDeactivate || canDelete;
-  const colCount = 7 + (showActions ? 1 : 0);
+  const colCount = 8 + (showActions ? 1 : 0);
+
+  const ids = (rows ?? []).map((r) => r.id);
+  const csvRows = (rows ?? []).map((r) => ({
+    id: r.id,
+    Code: r.code,
+    Name: r.name,
+    TRN: r.tax_registration_number ?? "",
+    "Credit limit": r.credit_limit,
+    "Payment terms": r.payment_terms_days ?? 30,
+    Status: r.is_active ? "Active" : "Inactive",
+  }));
 
   return (
     <div className="space-y-4">
@@ -61,10 +73,13 @@ export default async function CustomersPage({
 
       <ListToolbar searchPlaceholder="Search code, name or TRN…" />
 
+      <SelectionProvider>
+      <BulkBar entity="customer" entityLabel="customer" csvRows={csvRows} filename="customers" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>TRN</TableHead>
@@ -85,6 +100,7 @@ export default async function CustomersPage({
             )}
             {(rows ?? []).map((c) => (
               <TableRow key={c.id}>
+                <RowCheck id={c.id} />
                 <TableCell className="font-mono text-xs">{c.code}</TableCell>
                 <TableCell className="font-medium">
                   {perms.has(P.sales.customerEdit) ? (
@@ -116,6 +132,7 @@ export default async function CustomersPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }

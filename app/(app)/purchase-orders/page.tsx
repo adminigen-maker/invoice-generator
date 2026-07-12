@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { cancelPurchaseOrder, deletePurchaseOrder } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,18 @@ export default async function PurchaseOrdersPage({
   const canDelete = perms.has(P.procurement.poDelete);
   const showActions = canCancel || canDelete;
 
+  const ids = (rows ?? []).map((r) => r.id);
+  const csvRows = (rows ?? []).map((r) => ({
+    id: r.id,
+    Number: r.number,
+    Vendor: (r.vendor as { name?: string } | null)?.name ?? "",
+    "Order date": r.order_date,
+    Expected: r.expected_date ?? "",
+    Status: r.status,
+    Total: r.total,
+    Currency: r.currency,
+  }));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -60,10 +73,13 @@ export default async function PurchaseOrdersPage({
 
       <ListToolbar searchPlaceholder="Search PO number…" />
 
+      <SelectionProvider>
+      <BulkBar entity="purchase_order" entityLabel="purchase order" csvRows={csvRows} filename="purchase-orders" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>Number</TableHead>
               <TableHead>Vendor</TableHead>
               <TableHead>Order date</TableHead>
@@ -77,13 +93,14 @@ export default async function PurchaseOrdersPage({
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 9 : 8} className="text-center text-muted-foreground py-8">
                   {q ? `No purchase orders match “${q}”.` : "No purchase orders here."}
                 </TableCell>
               </TableRow>
             )}
             {(rows ?? []).map((r) => (
               <TableRow key={r.id}>
+                <RowCheck id={r.id} />
                 <TableCell className="font-mono text-xs">
                   <Link href={`/purchase-orders/${r.id}`} className="hover:underline">{r.number}</Link>
                 </TableCell>
@@ -112,6 +129,7 @@ export default async function PurchaseOrdersPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }

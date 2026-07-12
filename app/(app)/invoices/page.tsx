@@ -11,6 +11,7 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { canCancelDoc, canDeleteDoc } from "@/lib/doc-status";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { cancelInvoice, deleteInvoice } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,19 @@ export default async function InvoicesPage({
   const canCreate = perms.has(P.invoice.create);
   const showActions = canCancel || canDelete;
 
+  const ids = (rows ?? []).map((r) => r.id);
+  const csvRows = (rows ?? []).map((r) => ({
+    id: r.id,
+    Number: r.number,
+    Customer: (r.customer as { name?: string } | null)?.name ?? "",
+    Date: r.invoice_date,
+    Due: r.due_date ?? "",
+    Status: r.status,
+    Total: r.total,
+    Balance: r.balance,
+    Currency: r.currency,
+  }));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -66,10 +80,13 @@ export default async function InvoicesPage({
 
       <ListToolbar searchPlaceholder="Search invoice number…" />
 
+      <SelectionProvider>
+      <BulkBar entity="invoice" entityLabel="invoice" csvRows={csvRows} filename="invoices" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>Number</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Date</TableHead>
@@ -84,13 +101,14 @@ export default async function InvoicesPage({
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 9 : 8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 10 : 9} className="text-center text-muted-foreground py-8">
                   {q ? `No invoices match “${q}”.` : "No invoices here."}
                 </TableCell>
               </TableRow>
             )}
             {(rows ?? []).map((r) => (
               <TableRow key={r.id}>
+                <RowCheck id={r.id} />
                 <TableCell className="font-mono text-xs">
                   <Link href={`/invoices/${r.id}`} className="hover:underline">{r.number}</Link>
                 </TableCell>
@@ -120,6 +138,7 @@ export default async function InvoicesPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }

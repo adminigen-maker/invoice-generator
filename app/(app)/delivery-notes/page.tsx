@@ -10,6 +10,7 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { canDeleteDoc } from "@/lib/doc-status";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { deleteDeliveryNote } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,20 @@ export default async function DeliveryNotesPage({
   const canDelete = perms.has(P.inventory.deliveryDelete);
   const showActions = canDelete;
 
+  const ids = (rows ?? []).map((r) => r.id);
+  const csvRows = (rows ?? []).map((r) => {
+    const so = r.sales_order as { number?: string; customer?: { name?: string } | null } | null;
+    return {
+      id: r.id,
+      Number: r.number,
+      "Sales Order": so?.number ?? "",
+      Customer: so?.customer?.name ?? "",
+      Date: r.delivery_date,
+      Status: r.status,
+      Posted: r.posted_at ?? "",
+    };
+  });
+
   return (
     <div className="space-y-4">
       <div>
@@ -53,10 +68,13 @@ export default async function DeliveryNotesPage({
 
       <ListToolbar searchPlaceholder="Search delivery number…" />
 
+      <SelectionProvider>
+      <BulkBar entity="delivery_note" entityLabel="delivery note" csvRows={csvRows} filename="delivery-notes" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>Number</TableHead>
               <TableHead>Sales Order</TableHead>
               <TableHead>Customer</TableHead>
@@ -70,7 +88,7 @@ export default async function DeliveryNotesPage({
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 9 : 8} className="text-center text-muted-foreground py-8">
                   {q ? `No delivery notes match “${q}”.` : "No delivery notes here."}
                 </TableCell>
               </TableRow>
@@ -79,6 +97,7 @@ export default async function DeliveryNotesPage({
               const so = r.sales_order as { number?: string; customer?: { name?: string } | null } | null;
               return (
                 <TableRow key={r.id}>
+                  <RowCheck id={r.id} />
                   <TableCell className="font-mono text-xs">
                     <Link href={`/delivery-notes/${r.id}`} className="hover:underline">{r.number}</Link>
                   </TableCell>
@@ -107,6 +126,7 @@ export default async function DeliveryNotesPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }

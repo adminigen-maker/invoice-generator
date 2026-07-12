@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { deletePayment } from "./actions";
 import { RecordPaymentButton } from "./record-payment-dialog";
 
@@ -52,6 +53,19 @@ export default async function PaymentsPage({
     customer: i.customer?.name ?? "—",
   }));
 
+  const ids = (rows ?? []).map((r) => r.id);
+  const csvRows = (rows ?? []).map((r) => ({
+    id: r.id,
+    Number: r.number,
+    Customer: (r.customer as { name?: string } | null)?.name ?? "",
+    Date: r.payment_date,
+    Method: r.method,
+    Reference: r.reference ?? "",
+    Amount: r.amount,
+    Unallocated: r.amount_unallocated,
+    Currency: r.currency,
+  }));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -64,10 +78,13 @@ export default async function PaymentsPage({
 
       <ListToolbar showViews={false} searchPlaceholder="Search number or reference…" />
 
+      <SelectionProvider>
+      <BulkBar entity="payment" entityLabel="payment" csvRows={csvRows} filename="payments" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>Number</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Date</TableHead>
@@ -82,13 +99,14 @@ export default async function PaymentsPage({
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={canDelete ? 9 : 8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canDelete ? 10 : 9} className="text-center text-muted-foreground py-8">
                   {q ? `No payments match “${q}”.` : "No payments here."}
                 </TableCell>
               </TableRow>
             )}
             {(rows ?? []).map((r) => (
               <TableRow key={r.id}>
+                <RowCheck id={r.id} />
                 <TableCell className="font-mono text-xs">{r.number}</TableCell>
                 <TableCell className="font-medium">{(r.customer as { name?: string } | null)?.name ?? "—"}</TableCell>
                 <TableCell>{formatDate(r.payment_date)}</TableCell>
@@ -115,6 +133,7 @@ export default async function PaymentsPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }

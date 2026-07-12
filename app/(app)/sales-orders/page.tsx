@@ -12,6 +12,7 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { canCancelDoc, canDeleteDoc } from "@/lib/doc-status";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { cancelSalesOrder, deleteSalesOrder } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,17 @@ export default async function SalesOrdersPage({
   const canDelete = perms.has(P.sales.orderDelete);
   const showActions = canCancel || canDelete;
 
+  const ids = (rows ?? []).map((r) => r.id);
+  const csvRows = (rows ?? []).map((r) => ({
+    id: r.id,
+    Number: r.number,
+    Customer: (r.customer as { name?: string } | null)?.name ?? "",
+    Date: r.order_date,
+    Status: r.status,
+    Total: r.total,
+    Currency: r.currency,
+  }));
+
   return (
     <div className="space-y-4">
       <div>
@@ -54,10 +66,13 @@ export default async function SalesOrdersPage({
 
       <ListToolbar searchPlaceholder="Search order number…" />
 
+      <SelectionProvider>
+      <BulkBar entity="sales_order" entityLabel="sales order" csvRows={csvRows} filename="sales-orders" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>Number</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Date</TableHead>
@@ -70,13 +85,14 @@ export default async function SalesOrdersPage({
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 7 : 6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
                   {q ? `No sales orders match “${q}”.` : "No sales orders here. Confirm a quotation to create one."}
                 </TableCell>
               </TableRow>
             )}
             {(rows ?? []).map((r) => (
               <TableRow key={r.id}>
+                <RowCheck id={r.id} />
                 <TableCell className="font-mono text-xs">
                   <Link href={`/sales-orders/${r.id}`} className="hover:underline">{r.number}</Link>
                 </TableCell>
@@ -104,6 +120,7 @@ export default async function SalesOrdersPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }

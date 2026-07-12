@@ -14,6 +14,7 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { canCancelDoc, canDeleteDoc } from "@/lib/doc-status";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { cancelQuotation, deleteQuotation } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,18 @@ export default async function QuotationsPage({
   const canDelete = perms.has(P.sales.quotationDelete);
   const showActions = canCancel || canDelete;
 
+  const ids = (rows ?? []).map((r) => r.id);
+  const csvRows = (rows ?? []).map((r) => ({
+    id: r.id,
+    Number: r.number,
+    Customer: (r.customer as { name?: string } | null)?.name ?? "",
+    Date: r.quote_date,
+    "Valid until": r.valid_until ?? "",
+    Status: r.status,
+    Total: r.total,
+    Currency: r.currency,
+  }));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -63,10 +76,13 @@ export default async function QuotationsPage({
 
       <ListToolbar searchPlaceholder="Search quotation number…" />
 
+      <SelectionProvider>
+      <BulkBar entity="quotation" entityLabel="quotation" csvRows={csvRows} filename="quotations" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>Number</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Date</TableHead>
@@ -80,13 +96,14 @@ export default async function QuotationsPage({
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 9 : 8} className="text-center text-muted-foreground py-8">
                   {q ? `No quotations match “${q}”.` : "No quotations here."}
                 </TableCell>
               </TableRow>
             )}
             {(rows ?? []).map((quote) => (
               <TableRow key={quote.id}>
+                <RowCheck id={quote.id} />
                 <TableCell className="font-mono text-xs">
                   <Link href={`/quotations/${quote.id}`} className="hover:underline">{quote.number}</Link>
                 </TableCell>
@@ -117,6 +134,7 @@ export default async function QuotationsPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }

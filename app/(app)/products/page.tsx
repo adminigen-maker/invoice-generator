@@ -13,6 +13,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { ListToolbar } from "@/components/list-toolbar";
 import { RowActions } from "@/components/row-actions";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { setProductActive, deleteProduct } from "./actions";
 import { ilikeTerm } from "@/lib/list-query";
 
@@ -45,7 +46,18 @@ export default async function ProductsPage({
   const canDeactivate = perms.has(P.inventory.productEdit);
   const canDelete = perms.has(P.inventory.productDelete);
   const showActions = canDeactivate || canDelete;
-  const colCount = 8 + (perms.has(P.inventory.productViewCost) ? 1 : 0) + (showActions ? 1 : 0);
+  const colCount = 9 + (perms.has(P.inventory.productViewCost) ? 1 : 0) + (showActions ? 1 : 0);
+
+  const ids = (masked ?? []).map((r) => r.id);
+  const csvRows = (masked ?? []).map((r) => ({
+    id: r.id,
+    SKU: r.sku,
+    Name: r.name,
+    Category: (r.category as { name?: string } | null)?.name ?? "",
+    UoM: (r.uom as { code?: string } | null)?.code ?? "",
+    "Sale price": r.sale_price,
+    Status: r.is_active ? "Active" : "Inactive",
+  }));
 
   return (
     <div className="space-y-4">
@@ -63,10 +75,13 @@ export default async function ProductsPage({
 
       <ListToolbar searchPlaceholder="Search SKU or name…" />
 
+      <SelectionProvider>
+      <BulkBar entity="product" entityLabel="product" csvRows={csvRows} filename="products" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>SKU</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Category</TableHead>
@@ -93,6 +108,7 @@ export default async function ProductsPage({
             )}
             {(masked ?? []).map((p) => (
               <TableRow key={p.id}>
+                <RowCheck id={p.id} />
                 <TableCell className="font-mono text-xs">{p.sku}</TableCell>
                 <TableCell className="font-medium">
                   {perms.has(P.inventory.productEdit) ? (
@@ -127,6 +143,7 @@ export default async function ProductsPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }

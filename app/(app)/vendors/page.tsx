@@ -14,6 +14,7 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { RowActions } from "@/components/row-actions";
 import { setVendorActive, deleteVendor } from "./actions";
 import { ilikeTerm } from "@/lib/list-query";
+import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,18 @@ export default async function VendorsPage({
   const canDeactivate = perms.has(P.procurement.vendorEdit);
   const canDelete = perms.has(P.procurement.vendorDelete);
   const showActions = canDeactivate || canDelete;
-  const colCount = 7 + (showActions ? 1 : 0);
+  const colCount = 8 + (showActions ? 1 : 0);
+
+  const ids = (rows ?? []).map((v) => v.id);
+  const csvRows = (rows ?? []).map((v) => ({
+    id: v.id,
+    Code: v.code,
+    Name: v.name,
+    TRN: v.tax_registration_number ?? "",
+    Terms: v.payment_terms_days ?? 30,
+    Currency: v.currency ?? "AED",
+    Status: v.is_active ? "Active" : "Inactive",
+  }));
 
   return (
     <div className="space-y-4">
@@ -61,10 +73,13 @@ export default async function VendorsPage({
 
       <ListToolbar searchPlaceholder="Search code, name or TRN…" />
 
+      <SelectionProvider>
+      <BulkBar entity="vendor" entityLabel="vendor" csvRows={csvRows} filename="vendors" canDelete={canDelete} />
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <SelectAllHead ids={ids} />
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>TRN</TableHead>
@@ -85,6 +100,7 @@ export default async function VendorsPage({
             )}
             {(rows ?? []).map((v) => (
               <TableRow key={v.id}>
+                <RowCheck id={v.id} />
                 <TableCell className="font-mono text-xs">{v.code}</TableCell>
                 <TableCell className="font-medium">
                   {perms.has(P.procurement.vendorEdit) ? (
@@ -116,6 +132,7 @@ export default async function VendorsPage({
           </TableBody>
         </Table>
       </Card>
+      </SelectionProvider>
     </div>
   );
 }
