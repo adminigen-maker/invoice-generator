@@ -51,6 +51,13 @@ export const P = {
     vendorCreate: "procurement.vendor.create",
     vendorEdit: "procurement.vendor.edit",
     vendorDelete: "procurement.vendor.delete",
+    poView: "procurement.po.view",
+    poCreate: "procurement.po.create",
+    poEdit: "procurement.po.edit",
+    poConfirm: "procurement.po.confirm",
+    poReceive: "procurement.po.receive",
+    poCancel: "procurement.po.cancel",
+    poDelete: "procurement.po.delete",
   },
   invoice: {
     view: "invoice.view",
