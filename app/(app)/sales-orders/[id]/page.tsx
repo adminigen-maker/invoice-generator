@@ -4,11 +4,23 @@ import { createClient } from "@/lib/db/supabase-server";
 import { getPermissions } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 import { formatDate, formatMoney } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DocMetaGrid, DocStatGrid } from "@/components/doc-detail";
 import { CreateFromSOButtons } from "./actions-client";
+
+type Line = {
+  sequence: number;
+  description: string;
+  product?: { sku?: string; name?: string } | null;
+  uom?: { code?: string } | null;
+  quantity_ordered: number;
+  quantity_delivered: number;
+  quantity_invoiced: number;
+  unit_price: number;
+  line_total: number;
+};
 
 export default async function SalesOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,26 +43,28 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
 
   const canDeliver = perms.has(P.inventory.deliveryCreate);
   const canInvoice = perms.has(P.invoice.create);
+  const lines = ((so.lines ?? []) as Line[]).slice().sort((a, b) => a.sequence - b.sequence);
 
-  const anyOutstandingDelivery = (so.lines ?? []).some(
-    (l: { quantity_ordered: number; quantity_delivered: number }) => Number(l.quantity_ordered) > Number(l.quantity_delivered)
-  );
-  const anyOutstandingInvoice = (so.lines ?? []).some(
-    (l: { quantity_delivered: number; quantity_invoiced: number }) => Number(l.quantity_delivered) > Number(l.quantity_invoiced)
-  );
+  const ordered = lines.reduce((s, l) => s + Number(l.quantity_ordered), 0);
+  const delivered = lines.reduce((s, l) => s + Number(l.quantity_delivered), 0);
+  const invoiced = lines.reduce((s, l) => s + Number(l.quantity_invoiced), 0);
+  const deliveredPct = ordered > 0 ? Math.round((delivered / ordered) * 100) : 0;
+  const invoicedPct = ordered > 0 ? Math.round((invoiced / ordered) * 100) : 0;
+
+  const anyOutstandingDelivery = lines.some((l) => Number(l.quantity_ordered) > Number(l.quantity_delivered));
+  const anyOutstandingInvoice = lines.some((l) => Number(l.quantity_delivered) > Number(l.quantity_invoiced));
+
+  const quote = so.quotation as { number?: string } | null;
 
   return (
     <div className="space-y-4 max-w-6xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-3">
             {so.number}
             <StatusBadge status={so.status} />
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {(so.customer as { name?: string } | null)?.name} · {formatDate(so.order_date)}
-            {so.quotation && (<> · from <Link className="underline" href={`/quotations?q=${(so.quotation as { number?: string }).number}`}>{(so.quotation as { number?: string }).number}</Link></>)}
-          </p>
+          <p className="text-sm text-muted-foreground">Confirmed sales order</p>
         </div>
         <CreateFromSOButtons
           salesOrderId={so.id}
@@ -59,13 +73,36 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
         />
       </div>
 
+      <DocMetaGrid
+        items={[
+          { label: "Customer", value: (so.customer as { name?: string } | null)?.name ?? "—" },
+          { label: "Order date", value: formatDate(so.order_date) },
+          {
+            label: "From quotation",
+            value: quote?.number ? (
+              <Link className="underline" href={`/quotations?q=${quote.number}`}>{quote.number}</Link>
+            ) : "—",
+          },
+          { label: "Currency", value: so.currency ?? "AED" },
+        ]}
+      />
+
+      <DocStatGrid
+        items={[
+          { label: "Order total", value: formatMoney(so.total, so.currency) },
+          { label: "Delivered", value: `${deliveredPct}%`, tone: deliveredPct >= 100 ? "success" : undefined },
+          { label: "Invoiced", value: `${invoicedPct}%`, tone: invoicedPct >= 100 ? "success" : undefined },
+        ]}
+      />
+
       <Card>
         <CardHeader><CardTitle className="text-base">Lines</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Description</TableHead>
+                <TableHead className="w-8">#</TableHead>
+                <TableHead>Item</TableHead>
                 <TableHead className="text-right">Ordered</TableHead>
                 <TableHead className="text-right">Delivered</TableHead>
                 <TableHead className="text-right">Invoiced</TableHead>
@@ -74,17 +111,12 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(so.lines ?? []).sort((a: { sequence: number }, b: { sequence: number }) => a.sequence - b.sequence).map((l: {
-                sequence: number; description: string;
-                product?: { sku?: string; name?: string } | null;
-                uom?: { code?: string } | null;
-                quantity_ordered: number; quantity_delivered: number; quantity_invoiced: number;
-                unit_price: number; line_total: number;
-              }, i: number) => (
+              {lines.map((l, i) => (
                 <TableRow key={i}>
+                  <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell>
-                    <div>{l.description}</div>
-                    {l.product?.sku && <div className="text-xs text-muted-foreground">{l.product.sku}</div>}
+                    <div className="font-medium">{l.product?.name ?? l.description}</div>
+                    {l.product?.sku && <div className="text-xs text-muted-foreground font-mono">{l.product.sku}</div>}
                   </TableCell>
                   <TableCell className="text-right font-mono">{Number(l.quantity_ordered).toFixed(2)} {l.uom?.code}</TableCell>
                   <TableCell className="text-right font-mono text-muted-foreground">{Number(l.quantity_delivered).toFixed(2)}</TableCell>
@@ -95,22 +127,19 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
               ))}
             </TableBody>
           </Table>
+
+          <div className="flex justify-end pt-4">
+            <div className="w-full max-w-xs space-y-2 text-sm">
+              <Row label="Subtotal" value={formatMoney(so.subtotal, so.currency)} />
+              {Number(so.discount_total) > 0 && <Row label="Discount" value={`− ${formatMoney(so.discount_total, so.currency)}`} />}
+              <Row label="Tax (VAT)" value={formatMoney(so.tax_total, so.currency)} />
+              <div className="border-t pt-2 flex justify-between font-semibold text-base">
+                <span>Total</span><span className="font-mono">{formatMoney(so.total, so.currency)}</span>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
-
-      <div className="grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-2" />
-        <Card>
-          <CardContent className="pt-6 space-y-2 text-sm">
-            <Row label="Subtotal" value={formatMoney(so.subtotal, so.currency)} />
-            <Row label="Discount" value={`− ${formatMoney(so.discount_total, so.currency)}`} />
-            <Row label="Tax" value={formatMoney(so.tax_total, so.currency)} />
-            <div className="border-t pt-2 flex justify-between font-semibold text-base">
-              <span>Total</span><span className="font-mono">{formatMoney(so.total, so.currency)}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
