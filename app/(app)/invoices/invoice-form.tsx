@@ -65,6 +65,7 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
 
   const prodMap = useMemo(() => productMap(products), [products]);
   const taxMap = useMemo(() => new Map(taxes.map((t) => [t.id, Number(t.extra?.rate ?? 0)])), [taxes]);
+  const uomCodeById = useMemo(() => new Map(uoms.map((u) => [u.id, u.label])), [uoms]);
 
   const productOptions = useMemo(
     () => products.map((p) => <option key={p.id} value={p.id}>{p.label}</option>),
@@ -190,6 +191,9 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
                 discount_pct: l.discount_pct,
                 tax_rate: l.tax_id ? taxMap.get(l.tax_id) ?? 0 : 0,
               });
+              const lp = l.product_id ? prodMap.get(l.product_id) : undefined;
+              const lockedUom = (lp?.extra?.uom_id as string) || "";
+              const lockedUomCode = lockedUom ? uomCodeById.get(lockedUom) ?? "" : "";
               return (
                 <tr key={l.key} className="border-t">
                   <td className="p-1.5">
@@ -206,9 +210,9 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    {l.product_id && prodMap.get(l.product_id)?.extra?.stock != null && (
-                      <div className={`text-[11px] mt-1 ${Number(prodMap.get(l.product_id)!.extra!.stock) <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                        In stock: {Number(prodMap.get(l.product_id)!.extra!.stock).toFixed(2)}
+                    {lp?.extra?.stock != null && (
+                      <div className={`text-[11px] mt-1 ${Number(lp.extra.stock) <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        In stock: {Number(lp.extra.stock).toFixed(2)}{lockedUomCode ? ` ${lockedUomCode}` : ""}
                       </div>
                     )}
                   </td>
@@ -219,9 +223,18 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
                     <Input type="number" step="0.01" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} className="h-9 text-right" />
                   </td>
                   <td className="p-1.5">
-                    <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
-                      <option value="">—</option>
-                      {uomOptions}
+                    <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })}
+                      disabled={!!lockedUom}
+                      title={lockedUom ? "Unit is fixed by the selected product" : undefined}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:opacity-70">
+                      {lockedUom ? (
+                        <option value={lockedUom}>{lockedUomCode || "—"}</option>
+                      ) : (
+                        <>
+                          <option value="">—</option>
+                          {uomOptions}
+                        </>
+                      )}
                     </select>
                   </td>
                   <td className="p-1.5">

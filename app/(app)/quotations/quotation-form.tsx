@@ -110,6 +110,7 @@ export function QuotationForm({
 
   const prodMap = useMemo(() => productMap(products), [products]);
   const taxMap = useMemo(() => new Map(taxes.map((t) => [t.id, Number(t.extra?.rate ?? 0)])), [taxes]);
+  const uomCodeById = useMemo(() => new Map(uoms.map((u) => [u.id, u.label])), [uoms]);
 
   // Build the dropdown <option> lists ONCE. Without this, every keystroke in any
   // field re-created N products × rows option elements, the main typing lag.
@@ -269,6 +270,9 @@ export function QuotationForm({
                 discount_pct: l.discount_pct,
                 tax_rate: l.tax_id ? taxMap.get(l.tax_id) ?? 0 : 0,
               });
+              const lp = l.product_id ? prodMap.get(l.product_id) : undefined;
+              const lockedUom = (lp?.extra?.uom_id as string) || "";
+              const lockedUomCode = lockedUom ? uomCodeById.get(lockedUom) ?? "" : "";
               return (
                 <tr key={l.key} className="border-t">
                   <td className="p-1.5">
@@ -295,9 +299,9 @@ export function QuotationForm({
                         </Button>
                       )}
                     </div>
-                    {l.product_id && prodMap.get(l.product_id)?.extra?.stock != null && (
-                      <div className={`text-[11px] mt-1 ${Number(prodMap.get(l.product_id)!.extra!.stock) <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                        In stock: {Number(prodMap.get(l.product_id)!.extra!.stock).toFixed(2)}
+                    {lp?.extra?.stock != null && (
+                      <div className={`text-[11px] mt-1 ${Number(lp.extra.stock) <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        In stock: {Number(lp.extra.stock).toFixed(2)}{lockedUomCode ? ` ${lockedUomCode}` : ""}
                       </div>
                     )}
                   </td>
@@ -308,10 +312,18 @@ export function QuotationForm({
                     <Input type="number" step="0.01" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" />
                   </td>
                   <td className="p-1.5">
-                    <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })} disabled={isReadOnly}
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
-                      <option value="">—</option>
-                      {uomOptions}
+                    <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })}
+                      disabled={isReadOnly || !!lockedUom}
+                      title={lockedUom ? "Unit is fixed by the selected product" : undefined}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:opacity-70">
+                      {lockedUom ? (
+                        <option value={lockedUom}>{lockedUomCode || "—"}</option>
+                      ) : (
+                        <>
+                          <option value="">—</option>
+                          {uomOptions}
+                        </>
+                      )}
                     </select>
                   </td>
                   <td className="p-1.5">
