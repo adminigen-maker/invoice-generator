@@ -45,14 +45,14 @@ type NavItem = {
 // Items are grouped into *areas* (Dynamics-CRM style). The area switcher at the
 // bottom of the sidebar decides which area's items are shown.
 const NAV: NavItem[] = [
-  { area: "operations", section: "Overview", label: "Dashboard", href: "/", icon: LayoutDashboard, color: "text-sky-500" },
+  { area: "operations", section: "Insights", label: "Dashboard", href: "/", icon: LayoutDashboard, color: "text-sky-500" },
+  { area: "operations", section: "Insights", label: "Reports", href: "/reports", icon: BarChart3, color: "text-teal-500", perm: P.invoice.view },
   { area: "operations", section: "Sales", label: "Quotations", href: "/quotations", icon: FileText, color: "text-violet-500", perm: P.sales.quotationView },
   { area: "operations", section: "Sales", label: "Sales Orders", href: "/sales-orders", icon: ClipboardList, color: "text-indigo-500", perm: P.sales.orderView },
   { area: "operations", section: "Fulfilment", label: "Delivery Notes", href: "/delivery-notes", icon: Truck, color: "text-amber-500", perm: P.inventory.deliveryView },
   { area: "operations", section: "Purchasing", label: "Purchase Orders", href: "/purchase-orders", icon: ShoppingCart, color: "text-pink-500", perm: P.procurement.poView },
   { area: "operations", section: "Finance", label: "Invoices", href: "/invoices", icon: Receipt, color: "text-emerald-500", perm: P.invoice.view },
   { area: "operations", section: "Finance", label: "Payments", href: "/payments", icon: CircleDollarSign, color: "text-green-600", perm: P.invoice.paymentView },
-  { area: "operations", section: "Analytics", label: "Reports", href: "/reports", icon: BarChart3, color: "text-teal-500", perm: P.invoice.view },
 
   { area: "master", section: "Catalog", label: "Products", href: "/products", icon: Package, color: "text-orange-500", perm: P.inventory.productView },
   { area: "master", section: "Catalog", label: "Inventory", href: "/inventory", icon: Boxes, color: "text-lime-600", perm: P.inventory.stockView },
