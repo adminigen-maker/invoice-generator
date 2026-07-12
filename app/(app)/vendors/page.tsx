@@ -6,6 +6,7 @@ import { P } from "@/lib/rbac/permissions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { formatDate } from "@/lib/utils";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -27,7 +28,7 @@ export default async function VendorsPage({
 
   let query = supabase
     .from("vendor")
-    .select("id, code, name, tax_registration_number, payment_terms_days, currency, is_active")
+    .select("id, code, name, tax_registration_number, payment_terms_days, currency, is_active, created_at")
     .order("name")
     .limit(200);
 
@@ -42,7 +43,7 @@ export default async function VendorsPage({
   const canDeactivate = perms.has(P.procurement.vendorEdit);
   const canDelete = perms.has(P.procurement.vendorDelete);
   const showActions = canDeactivate || canDelete;
-  const colCount = 6 + (showActions ? 1 : 0);
+  const colCount = 7 + (showActions ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -70,6 +71,7 @@ export default async function VendorsPage({
               <TableHead>Payment terms</TableHead>
               <TableHead>Currency</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
@@ -95,6 +97,7 @@ export default async function VendorsPage({
                 <TableCell>
                   {v.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
                 </TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(v.created_at)}</TableCell>
                 {showActions && (
                   <TableCell>
                     <RowActions

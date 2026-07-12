@@ -31,7 +31,7 @@ export default async function QuotationsPage({
 
   let query = supabase
     .from("quotation")
-    .select("id, number, quote_date, valid_until, status, total, currency, customer:customer(name)")
+    .select("id, number, quote_date, valid_until, status, total, currency, created_at, customer:customer(name)")
     .order("quote_date", { ascending: false })
     .limit(200);
 
@@ -73,13 +73,14 @@ export default async function QuotationsPage({
               <TableHead>Valid until</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Total</TableHead>
+              <TableHead>Created</TableHead>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 7 : 6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
                   {q ? `No quotations match “${q}”.` : "No quotations here."}
                 </TableCell>
               </TableRow>
@@ -96,6 +97,7 @@ export default async function QuotationsPage({
                 <TableCell>{formatDate(quote.valid_until)}</TableCell>
                 <TableCell><StatusBadge status={quote.status} /></TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(quote.total, quote.currency)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(quote.created_at)}</TableCell>
                 {showActions && (
                   <TableCell>
                     <DocRowActions

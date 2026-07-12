@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { createClient } from "@/lib/db/supabase-server";
 import { getPermissions } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
-import { formatMoney } from "@/lib/utils";
+import { formatDate, formatMoney } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -28,7 +28,7 @@ export default async function CustomersPage({
 
   let query = supabase
     .from("customer")
-    .select("id, code, name, tax_registration_number, credit_limit, payment_terms_days, is_active")
+    .select("id, code, name, tax_registration_number, credit_limit, payment_terms_days, is_active, created_at")
     .order("name")
     .limit(200);
 
@@ -43,7 +43,7 @@ export default async function CustomersPage({
   const canDeactivate = perms.has(P.sales.customerEdit);
   const canDelete = perms.has(P.sales.customerDelete);
   const showActions = canDeactivate || canDelete;
-  const colCount = 6 + (showActions ? 1 : 0);
+  const colCount = 7 + (showActions ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -71,6 +71,7 @@ export default async function CustomersPage({
               <TableHead className="text-right">Credit limit</TableHead>
               <TableHead>Payment terms</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
@@ -96,6 +97,7 @@ export default async function CustomersPage({
                 <TableCell>
                   {c.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
                 </TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(c.created_at)}</TableCell>
                 {showActions && (
                   <TableCell>
                     <RowActions

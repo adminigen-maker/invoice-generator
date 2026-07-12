@@ -27,7 +27,7 @@ export default async function InvoicesPage({
 
   let query = supabase
     .from("invoice")
-    .select("id, number, invoice_date, due_date, status, total, amount_paid, balance, currency, customer:customer(name)")
+    .select("id, number, invoice_date, due_date, status, total, amount_paid, balance, currency, created_at, customer:customer(name)")
     .order("invoice_date", { ascending: false })
     .limit(200);
 
@@ -65,13 +65,14 @@ export default async function InvoicesPage({
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="text-right">Balance</TableHead>
+              <TableHead>Created</TableHead>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 9 : 8} className="text-center text-muted-foreground py-8">
                   {q ? `No invoices match “${q}”.` : "No invoices here."}
                 </TableCell>
               </TableRow>
@@ -87,6 +88,7 @@ export default async function InvoicesPage({
                 <TableCell><StatusBadge status={r.status} /></TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(r.total, r.currency)}</TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(r.balance, r.currency)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.created_at)}</TableCell>
                 {showActions && (
                   <TableCell>
                     <DocRowActions

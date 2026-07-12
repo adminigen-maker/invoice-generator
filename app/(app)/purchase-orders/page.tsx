@@ -28,7 +28,7 @@ export default async function PurchaseOrdersPage({
 
   let query = supabase
     .from("purchase_order")
-    .select("id, number, order_date, expected_date, status, total, currency, vendor:vendor(name)")
+    .select("id, number, order_date, expected_date, status, total, currency, created_at, vendor:vendor(name)")
     .order("order_date", { ascending: false })
     .limit(200);
 
@@ -70,13 +70,14 @@ export default async function PurchaseOrdersPage({
               <TableHead>Expected</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Total</TableHead>
+              <TableHead>Created</TableHead>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 7 : 6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
                   {q ? `No purchase orders match “${q}”.` : "No purchase orders here."}
                 </TableCell>
               </TableRow>
@@ -91,6 +92,7 @@ export default async function PurchaseOrdersPage({
                 <TableCell>{r.expected_date ? formatDate(r.expected_date) : "—"}</TableCell>
                 <TableCell><StatusBadge status={r.status} /></TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(r.total, r.currency)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.created_at)}</TableCell>
                 {showActions && (
                   <TableCell>
                     <DocRowActions

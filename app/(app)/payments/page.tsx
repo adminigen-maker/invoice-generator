@@ -22,7 +22,7 @@ export default async function PaymentsPage({
 
   let query = supabase
     .from("payment")
-    .select("id, number, payment_date, method, reference, amount, amount_unallocated, currency, customer:customer(name)")
+    .select("id, number, payment_date, method, reference, amount, amount_unallocated, currency, created_at, customer:customer(name)")
     .order("payment_date", { ascending: false })
     .limit(200);
 
@@ -53,13 +53,14 @@ export default async function PaymentsPage({
               <TableHead>Reference</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-right">Unallocated</TableHead>
+              <TableHead>Created</TableHead>
               {canDelete && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={canDelete ? 8 : 7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canDelete ? 9 : 8} className="text-center text-muted-foreground py-8">
                   {q ? `No payments match “${q}”.` : "No payments here."}
                 </TableCell>
               </TableRow>
@@ -73,6 +74,7 @@ export default async function PaymentsPage({
                 <TableCell className="text-muted-foreground">{r.reference ?? "—"}</TableCell>
                 <TableCell className="text-right font-mono">{formatMoney(r.amount, r.currency)}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">{formatMoney(r.amount_unallocated, r.currency)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.created_at)}</TableCell>
                 {canDelete && (
                   <TableCell>
                     <DocRowActions

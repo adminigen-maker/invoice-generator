@@ -27,7 +27,7 @@ export default async function DeliveryNotesPage({
 
   let query = supabase
     .from("delivery_note")
-    .select("id, number, delivery_date, status, posted_at, sales_order:sales_order(number, customer:customer(name))")
+    .select("id, number, delivery_date, status, posted_at, created_at, sales_order:sales_order(number, customer:customer(name))")
     .order("delivery_date", { ascending: false })
     .limit(200);
 
@@ -63,13 +63,14 @@ export default async function DeliveryNotesPage({
               <TableHead>Date</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Posted</TableHead>
+              <TableHead>Created</TableHead>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {(rows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={showActions ? 7 : 6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActions ? 8 : 7} className="text-center text-muted-foreground py-8">
                   {q ? `No delivery notes match “${q}”.` : "No delivery notes here."}
                 </TableCell>
               </TableRow>
@@ -86,6 +87,7 @@ export default async function DeliveryNotesPage({
                   <TableCell>{formatDate(r.delivery_date)}</TableCell>
                   <TableCell><StatusBadge status={r.status} /></TableCell>
                   <TableCell>{r.posted_at ? formatDate(r.posted_at) : "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(r.created_at)}</TableCell>
                   {showActions && (
                     <TableCell>
                       <DocRowActions

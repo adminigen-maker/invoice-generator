@@ -4,7 +4,7 @@ import { createClient } from "@/lib/db/supabase-server";
 import { getPermissions } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 import { maskFields } from "@/lib/rbac/field-filter";
-import { formatMoney } from "@/lib/utils";
+import { formatDate, formatMoney } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,7 +29,7 @@ export default async function ProductsPage({
 
   let query = supabase
     .from("product")
-    .select("id, sku, name, sale_price, cost_price, is_active, uom:unit_of_measure(code), category:product_category(name)")
+    .select("id, sku, name, sale_price, cost_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name)")
     .order("name")
     .limit(200);
 
@@ -45,7 +45,7 @@ export default async function ProductsPage({
   const canDeactivate = perms.has(P.inventory.productEdit);
   const canDelete = perms.has(P.inventory.productDelete);
   const showActions = canDeactivate || canDelete;
-  const colCount = 7 + (perms.has(P.inventory.productViewCost) ? 1 : 0) + (showActions ? 1 : 0);
+  const colCount = 8 + (perms.has(P.inventory.productViewCost) ? 1 : 0) + (showActions ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -76,6 +76,7 @@ export default async function ProductsPage({
                 <TableHead className="text-right">Cost price</TableHead>
               )}
               <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
@@ -107,6 +108,7 @@ export default async function ProductsPage({
                 <TableCell>
                   {p.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
                 </TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate((p as { created_at?: string }).created_at)}</TableCell>
                 {showActions && (
                   <TableCell>
                     <RowActions
