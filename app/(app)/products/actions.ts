@@ -130,6 +130,39 @@ export async function quickCreateProduct(
   }
 }
 
+// Inline category creation used by the "+ New category" quick-add on the form.
+const quickCategorySchema = z.object({ name: z.string().trim().min(1, "Name required").max(60) });
+export type QuickCategory = { id: string; label: string };
+
+export async function quickCreateCategory(
+  input: unknown
+): Promise<{ ok: true; item: QuickCategory } | { ok: false; error: string }> {
+  try {
+    await requirePermission(P.inventory.productCreate);
+    const v = quickCategorySchema.parse(input);
+    const supabase = await createClient();
+    const base =
+      v.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 32) || "CAT";
+    // product_category.code is required + unique; derive from the name and retry
+    // once with a suffix on collision.
+    for (const code of [base, `${base}_${Date.now().toString(36).slice(-4).toUpperCase()}`]) {
+      const { data, error } = await supabase
+        .from("product_category")
+        .insert({ code, name: v.name })
+        .select("id, name")
+        .single();
+      if (!error) {
+        revalidatePath("/products");
+        return { ok: true, item: { id: data.id, label: data.name } };
+      }
+      if (!/duplicate|unique/i.test(error.message)) return { ok: false, error: error.message };
+    }
+    return { ok: false, error: "Couldn't generate a unique category code — try a different name." };
+  } catch (e) {
+    return { ok: false, error: actionError(e, "create categories") };
+  }
+}
+
 function actionError(e: unknown, action: string): string {
   if ((e as { code?: string })?.code === "PERMISSION_DENIED") {
     return `You don't have permission to ${action}.`;

@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { QuickAddCategory } from "@/components/quick-add/quick-add-category";
 import { createProduct, updateProduct } from "./actions";
 
 type Option = { id: string; label: string };
@@ -35,10 +36,13 @@ type Props = {
   canViewCost: boolean;
 };
 
-export function ProductForm({ initial, uoms, taxes, categories, canViewCost }: Props) {
+export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, canViewCost }: Props) {
   const router = useRouter();
   const isEdit = !!initial?.id;
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState(categoriesInit);
+  const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
+  const [catOpen, setCatOpen] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -60,12 +64,28 @@ export function ProductForm({ initial, uoms, taxes, categories, canViewCost }: P
   const pending = saving;
 
   return (
+    <>
     <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
       <Field label="SKU"><Input name="sku" defaultValue={initial?.sku ?? ""} placeholder={isEdit ? undefined : "Auto‑generated if left blank"} /></Field>
       <Field label="Name" required><Input name="name" defaultValue={initial?.name ?? ""} required /></Field>
 
       <Field label="Category" span={2}>
-        <Select name="category_id" defaultValue={initial?.category_id ?? ""} options={categories} placeholder="(uncategorized)" />
+        <div className="flex gap-2">
+          <select
+            name="category_id"
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">(uncategorized)</option>
+            {categories.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+          <Button type="button" variant="outline" size="icon" className="shrink-0" title="Add new category" onClick={() => setCatOpen(true)}>
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
       </Field>
 
       <Field label="Unit of measure" required>
@@ -108,6 +128,16 @@ export function ProductForm({ initial, uoms, taxes, categories, canViewCost }: P
         </Button>
       </div>
     </form>
+
+    <QuickAddCategory
+      open={catOpen}
+      onClose={() => setCatOpen(false)}
+      onCreated={(item) => {
+        setCategories((prev) => [...prev, item]);
+        setCategoryId(item.id);
+      }}
+    />
+    </>
   );
 }
 
