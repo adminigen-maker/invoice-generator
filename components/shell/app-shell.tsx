@@ -69,15 +69,15 @@ export function AppShell({
           (the drawer takes over). */}
       <aside
         className={cn(
-          "hidden md:flex shrink-0 bg-background flex-col overflow-hidden",
+          "hidden md:flex shrink-0 bg-background flex-col overflow-hidden border-r",
           ready && "transition-[width] duration-200 ease-in-out",
           collapsed ? "w-16" : "w-60"
         )}
       >
-        {/* Logo box — part of the colored top bar (matches the header). */}
+        {/* Logo box — light, part of the sidebar (not the colored header). */}
         <div
           className={cn(
-            "h-14 flex items-center bg-slate-900 text-slate-100 shrink-0 w-full overflow-hidden",
+            "h-14 flex items-center border-b shrink-0 w-full overflow-hidden",
             collapsed ? "justify-center" : "justify-between pl-5 pr-2"
           )}
         >
@@ -87,29 +87,28 @@ export function AppShell({
               onClick={toggle}
               aria-label="Show sidebar"
               title="Show sidebar"
-              className="inline-grid h-9 w-9 place-items-center rounded-md text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+              className="inline-grid h-9 w-9 place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
           ) : (
             <>
               <Link href="/" title="Invoice UAE" className="font-semibold tracking-tight whitespace-nowrap">
-                Invoice <span className="text-slate-400 ml-1">UAE</span>
+                Invoice <span className="text-muted-foreground ml-1">UAE</span>
               </Link>
               <button
                 type="button"
                 onClick={toggle}
                 aria-label="Hide sidebar"
                 title="Hide sidebar"
-                className="inline-grid h-9 w-9 place-items-center rounded-md shrink-0 text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                className="inline-grid h-9 w-9 place-items-center rounded-md shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
             </>
           )}
         </div>
-        {/* Sidebar body stays light; its right edge carries the divider. */}
-        <div className="flex flex-1 flex-col min-h-0 w-full border-r">
+        <div className="flex flex-1 flex-col min-h-0 w-full">
           <SidebarContent permissions={permissions} collapsed={collapsed} />
         </div>
       </aside>
