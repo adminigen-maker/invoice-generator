@@ -69,14 +69,15 @@ export function AppShell({
           (the drawer takes over). */}
       <aside
         className={cn(
-          "hidden md:flex shrink-0 bg-slate-900 text-slate-100 flex-col overflow-hidden border-r border-slate-800",
+          "hidden md:flex shrink-0 bg-background flex-col overflow-hidden",
           ready && "transition-[width] duration-200 ease-in-out",
           collapsed ? "w-16" : "w-60"
         )}
       >
+        {/* Logo box — part of the colored top bar (matches the header). */}
         <div
           className={cn(
-            "h-14 flex items-center border-b border-slate-800 shrink-0 w-full overflow-hidden",
+            "h-14 flex items-center bg-slate-900 text-slate-100 shrink-0 w-full overflow-hidden",
             collapsed ? "justify-center" : "justify-between pl-5 pr-2"
           )}
         >
@@ -107,19 +108,20 @@ export function AppShell({
             </>
           )}
         </div>
-        <div className="flex flex-1 flex-col min-h-0 w-full">
+        {/* Sidebar body stays light; its right edge carries the divider. */}
+        <div className="flex flex-1 flex-col min-h-0 w-full border-r">
           <SidebarContent permissions={permissions} collapsed={collapsed} />
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 shrink-0 border-b bg-background flex items-center px-3 sm:px-6 justify-between gap-2">
+        <header className="h-14 shrink-0 bg-slate-900 text-slate-100 flex items-center px-3 sm:px-6 justify-between gap-2">
           <div className="flex items-center gap-1 min-w-0">
             {/* Mobile drawer trigger (below md) */}
             <MobileNav permissions={permissions} />
-            <div className="text-sm text-muted-foreground truncate">
+            <div className="text-sm text-slate-400 truncate">
               <span className="hidden sm:inline">Signed in as </span>
-              <span className="text-foreground font-medium">{userName}</span>
+              <span className="text-white font-medium">{userName}</span>
               <span className="mx-2 hidden lg:inline">·</span>
               <span className="hidden lg:inline">{userEmail}</span>
             </div>

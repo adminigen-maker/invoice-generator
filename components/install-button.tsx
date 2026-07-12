@@ -49,7 +49,12 @@ export function InstallButton() {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={install} className="gap-1.5">
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={install}
+      className="gap-1.5 text-slate-200 hover:text-white hover:bg-white/10 border border-white/25"
+    >
       <Download className="h-4 w-4" />
       <span className="hidden sm:inline">Install app</span>
     </Button>

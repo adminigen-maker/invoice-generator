@@ -11,7 +11,13 @@ export function SignOutButton() {
 
   return (
     <>
-      <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="text-slate-200 hover:text-white hover:bg-white/10"
+        onClick={() => setOpen(true)}
+      >
         <LogOut className="h-4 w-4 sm:mr-2" />
         <span className="hidden sm:inline">Sign out</span>
       </Button>
