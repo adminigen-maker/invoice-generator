@@ -61,7 +61,7 @@ export function ProductForm({ initial, uoms, taxes, categories, canViewCost }: P
 
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-      <Field label="SKU" required><Input name="sku" defaultValue={initial?.sku ?? ""} required /></Field>
+      <Field label="SKU"><Input name="sku" defaultValue={initial?.sku ?? ""} placeholder={isEdit ? undefined : "Auto‑generated if left blank"} /></Field>
       <Field label="Name" required><Input name="name" defaultValue={initial?.name ?? ""} required /></Field>
 
       <Field label="Category" span={2}>

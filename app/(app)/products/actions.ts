@@ -7,7 +7,8 @@ import { requirePermission } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 
 const productSchema = z.object({
-  sku: z.string().min(1, "SKU required"),
+  // Optional — a blank SKU is auto-generated on create (e.g. SKU-00001).
+  sku: z.string().optional().nullable(),
   name: z.string().min(1, "Name required"),
   description: z.string().optional().nullable(),
   category_id: z.string().uuid().optional().nullable(),
@@ -21,6 +22,12 @@ const productSchema = z.object({
 });
 
 type FormResult = { ok: true; id: string } | { ok: false; error: string };
+
+/** Draw the next SKU from the `product` numbering sequence (e.g. SKU-00001). */
+async function nextSku(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
+  const { data } = await supabase.rpc("next_document_number", { seq_code: "product" });
+  return (data as string) ?? `SKU-${Date.now()}`;
+}
 
 function parseForm(fd: FormData) {
   const raw = Object.fromEntries(fd.entries());
@@ -39,6 +46,7 @@ export async function createProduct(fd: FormData): Promise<FormResult> {
     await requirePermission(P.inventory.productCreate);
     const input = parseForm(fd);
     const supabase = await createClient();
+    if (!input.sku) input.sku = await nextSku(supabase);
     const { data: user } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("product")
@@ -58,7 +66,10 @@ export async function updateProduct(id: string, fd: FormData): Promise<FormResul
     await requirePermission(P.inventory.productEdit);
     const input = parseForm(fd);
     const supabase = await createClient();
-    const { error } = await supabase.from("product").update(input).eq("id", id);
+    // Never blank out an existing SKU on edit.
+    const patch = { ...input };
+    if (!patch.sku) delete patch.sku;
+    const { error } = await supabase.from("product").update(patch).eq("id", id);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/products");
     revalidatePath(`/products/${id}`);
@@ -70,7 +81,7 @@ export async function updateProduct(id: string, fd: FormData): Promise<FormResul
 
 // Minimal inline creation used by the "+ New product" quick-add in forms.
 const quickProductSchema = z.object({
-  sku: z.string().min(1, "SKU required"),
+  sku: z.string().optional().nullable().or(z.literal("")),
   name: z.string().min(1, "Name required"),
   uom_id: z.string().uuid("Unit of measure required"),
   sale_price: z.coerce.number().min(0).default(0),
@@ -90,11 +101,12 @@ export async function quickCreateProduct(
     await requirePermission(P.inventory.productCreate);
     const v = quickProductSchema.parse(input);
     const supabase = await createClient();
+    const sku = v.sku || (await nextSku(supabase));
     const { data: user } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("product")
       .insert({
-        sku: v.sku,
+        sku,
         name: v.name,
         uom_id: v.uom_id,
         sale_price: v.sale_price,

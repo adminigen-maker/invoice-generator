@@ -51,7 +51,16 @@ export function CustomerForm({ initial, taxes }: { initial?: CustomerValues; tax
 
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-      <Field label="Code"><Input name="code" defaultValue={initial?.code ?? ""} placeholder="auto-generated" /></Field>
+      <Field label="Code">
+        {isEdit ? (
+          <>
+            <Input value={initial?.code ?? ""} disabled readOnly />
+            <input type="hidden" name="code" value={initial?.code ?? ""} />
+          </>
+        ) : (
+          <Input disabled value="" placeholder="Generated automatically on save (CUST‑…)" />
+        )}
+      </Field>
       <Field label="Currency"><Input name="currency" defaultValue={initial?.currency ?? "AED"} /></Field>
 
       <Field label="Name" required span={2}><Input name="name" required defaultValue={initial?.name ?? ""} /></Field>
