@@ -5,6 +5,7 @@ import { P } from "@/lib/rbac/permissions";
 import { formatMoney } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ReportsToolbar } from "@/components/reports-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,44 @@ type Reports = {
   revenue_by_month: { month: string; revenue: number }[];
 };
 
-export default async function ReportsPage() {
+function toCsv(r: Reports, from?: string, to?: string): string {
+  const esc = (v: unknown) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines: string[] = [];
+  lines.push(`Invoice UAE — Report`);
+  lines.push(`Period,${from || "all time"},${to || "today"}`);
+  lines.push("");
+  lines.push("Totals");
+  lines.push(`Invoices,${r.totals.invoice_count}`);
+  lines.push(`Revenue,${r.totals.revenue}`);
+  lines.push(`Collected,${r.totals.collected}`);
+  lines.push(`Outstanding,${r.totals.outstanding}`);
+  lines.push("");
+  lines.push("AR aging,Amount");
+  lines.push(`Not due,${r.ar_aging.not_due}`);
+  lines.push(`1-30 days,${r.ar_aging.d1_30}`);
+  lines.push(`31-60 days,${r.ar_aging.d31_60}`);
+  lines.push(`60+ days,${r.ar_aging.d60_plus}`);
+  lines.push("");
+  lines.push("Top customers,Invoices,Revenue");
+  r.top_customers.forEach((c) => lines.push(`${esc(c.name)},${c.invoices},${c.revenue}`));
+  lines.push("");
+  lines.push("Top products,Qty,Revenue");
+  r.top_products.forEach((p) => lines.push(`${esc(p.name)},${p.qty},${p.revenue}`));
+  lines.push("");
+  lines.push("Month,Revenue");
+  r.revenue_by_month.forEach((m) => lines.push(`${m.month},${m.revenue}`));
+  return lines.join("\n");
+}
+
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   if (!(await can(P.invoice.view))) redirect("/");
+  const { from, to } = await searchParams;
 
   const supabase = await createClient();
-  const { data } = await supabase.rpc("reports_summary");
+  const { data } = await supabase.rpc("reports_summary", { from_date: from ?? null, to_date: to ?? null });
   const r = (data as Reports | null) ?? null;
 
   if (!r) {
@@ -46,8 +80,10 @@ export default async function ReportsPage() {
     <div className="space-y-4 max-w-6xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-        <p className="text-sm text-muted-foreground">Sales, receivables and product performance at a glance.</p>
+        <p className="text-sm text-muted-foreground">Sales, receivables and product performance. Filter by date and export.</p>
       </div>
+
+      <ReportsToolbar csv={toCsv(r, from, to)} filename={`report-${from || "all"}-${to || "today"}.csv`} />
 
       {/* Headline numbers */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
