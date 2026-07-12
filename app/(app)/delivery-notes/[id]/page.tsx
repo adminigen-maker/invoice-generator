@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DocMetaGrid, DocStatGrid } from "@/components/doc-detail";
+import { PdfButton } from "@/components/pdf-button";
 import { PostDeliveryButton } from "./post-button";
 
 type Line = { product?: { sku?: string; name?: string } | null; uom?: { code?: string } | null; quantity: number };
@@ -45,7 +46,10 @@ export default async function DeliveryNotePage({ params }: { params: Promise<{ i
             Goods issue{posted ? ` · posted ${formatDate(dn.posted_at)}` : " · not yet posted"}
           </p>
         </div>
-        {!posted && canPost && <PostDeliveryButton id={dn.id} />}
+        <div className="flex flex-wrap gap-2">
+          <PdfButton url={`/delivery-notes/${dn.id}/pdf`} filename={`${dn.number}.pdf`} />
+          {!posted && canPost && <PostDeliveryButton id={dn.id} />}
+        </div>
       </div>
 
       <DocMetaGrid

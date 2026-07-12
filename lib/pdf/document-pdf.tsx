@@ -122,6 +122,7 @@ export type DocumentPdfProps = {
   lines: DocLine[];
   totals: { untaxed: number; tax: number; total: number };
   showTax?: boolean;
+  showPrices?: boolean; // false for delivery notes (goods issue, no money columns)
 };
 
 const num = (n: number) => Number(n || 0).toFixed(2);
@@ -137,8 +138,11 @@ function fmtDate(s?: string): string {
 }
 
 export function DocumentPdf(p: DocumentPdfProps) {
-  const showTax = p.showTax ?? true;
+  const showPrices = p.showPrices ?? true;
+  const showTax = (p.showTax ?? true) && showPrices;
   const c = p.company;
+  const descStyle = showPrices ? styles.colDesc : { flex: 72 };
+  const qtyStyle = showPrices ? styles.colQty : { flex: 20, textAlign: "right" as const };
 
   return (
     <Document>
@@ -197,29 +201,30 @@ export function DocumentPdf(p: DocumentPdfProps) {
         {/* Line items table */}
         <View style={styles.table}>
           <View style={styles.thead}>
-            <Text style={[styles.th, styles.colDesc]}>DESCRIPTION</Text>
-            <Text style={[styles.th, styles.colQty]}>QUANTITY</Text>
-            <Text style={[styles.th, styles.colPrice]}>UNIT PRICE</Text>
+            <Text style={[styles.th, descStyle]}>DESCRIPTION</Text>
+            <Text style={[styles.th, qtyStyle]}>QUANTITY</Text>
+            {showPrices ? <Text style={[styles.th, styles.colPrice]}>UNIT PRICE</Text> : null}
             {showTax ? <Text style={[styles.th, styles.colVat]}>VAT</Text> : null}
             {showTax ? <Text style={[styles.th, styles.colVatAmt]}>VAT AMOUNT</Text> : null}
-            <Text style={[styles.th, styles.colAmount]}>AMOUNT</Text>
+            {showPrices ? <Text style={[styles.th, styles.colAmount]}>AMOUNT</Text> : null}
           </View>
           {p.lines.map((l, i) => (
             <View key={i} style={styles.tr} wrap={false}>
-              <Text style={styles.colDesc}>{l.description}</Text>
-              <Text style={styles.colQty}>
+              <Text style={descStyle}>{l.description}</Text>
+              <Text style={qtyStyle}>
                 {num(l.quantity)}
                 {l.uom ? ` ${l.uom}` : ""}
               </Text>
-              <Text style={styles.colPrice}>{num(l.unit_price)}</Text>
+              {showPrices ? <Text style={styles.colPrice}>{num(l.unit_price)}</Text> : null}
               {showTax ? <Text style={styles.colVat}>{l.tax_label}</Text> : null}
               {showTax ? <Text style={styles.colVatAmt}>{money(l.tax_amount, p.currency)}</Text> : null}
-              <Text style={styles.colAmount}>{money(l.amount, p.currency)}</Text>
+              {showPrices ? <Text style={styles.colAmount}>{money(l.amount, p.currency)}</Text> : null}
             </View>
           ))}
         </View>
 
-        {/* Payment info (left) + totals (right) */}
+        {/* Payment info (left) + totals (right) — hidden for delivery notes */}
+        {showPrices && (
         <View style={styles.bottomRow}>
           <View style={styles.payBlock}>
             {p.paymentTerms ? <Text>Payment terms: {p.paymentTerms}</Text> : null}
@@ -252,6 +257,7 @@ export function DocumentPdf(p: DocumentPdfProps) {
             </View>
           </View>
         </View>
+        )}
 
         {/* Signature line */}
         <View style={styles.signRow}>

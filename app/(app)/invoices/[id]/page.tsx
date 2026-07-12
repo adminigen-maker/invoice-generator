@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { FileDown } from "lucide-react";
+import { PdfButton } from "@/components/pdf-button";
 import { createClient } from "@/lib/db/supabase-server";
 import { can } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
@@ -53,11 +52,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild>
-            <Link href={`/invoices/${id}/pdf`} target="_blank">
-              <FileDown className="h-4 w-4 mr-2" />PDF
-            </Link>
-          </Button>
+          <PdfButton url={`/invoices/${id}/pdf`} filename={`${inv.number}.pdf`} />
           {!posted && canPost && <PostInvoiceButton id={inv.id} />}
           {isDraft && canCancel && <CancelInvoiceButton id={inv.id} />}
         </div>

@@ -1,12 +1,10 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { FileDown } from "lucide-react";
 import { createClient } from "@/lib/db/supabase-server";
 import { can } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 import { QuotationForm } from "../quotation-form";
 import { StatusBadge } from "@/components/status-badge";
-import { Button } from "@/components/ui/button";
+import { PdfButton } from "@/components/pdf-button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function ViewQuotationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -45,11 +43,7 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
           </h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link href={`/quotations/${id}/pdf`} target="_blank">
-              <FileDown className="h-4 w-4 mr-2" />PDF
-            </Link>
-          </Button>
+          <PdfButton url={`/quotations/${id}/pdf`} filename={`${quotation.number}.pdf`} />
         </div>
       </div>
 
