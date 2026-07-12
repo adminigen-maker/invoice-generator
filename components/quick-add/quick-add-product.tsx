@@ -25,7 +25,6 @@ export function QuickAddProduct({
   onCreated: (item: QuickProduct) => void;
 }) {
   const [saving, setSaving] = useState(false);
-  const [sku, setSku] = useState("");
   const [name, setName] = useState("");
   const [uomId, setUomId] = useState(uoms[0]?.id ?? "");
   const [price, setPrice] = useState("0");
@@ -35,7 +34,7 @@ export function QuickAddProduct({
     e.preventDefault();
     setSaving(true);
     const res = await quickCreateProduct({
-      sku,
+      sku: "",
       name,
       uom_id: uomId,
       sale_price: Number(price) || 0,
@@ -48,7 +47,6 @@ export function QuickAddProduct({
     }
     toast.success("Product created");
     onCreated(res.item);
-    setSku("");
     setName("");
     setPrice("0");
     setTaxId("");
@@ -60,8 +58,8 @@ export function QuickAddProduct({
       <form onSubmit={submit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label>SKU <span className="text-destructive">*</span></Label>
-            <Input value={sku} onChange={(e) => setSku(e.target.value)} required autoFocus />
+            <Label>Name <span className="text-destructive">*</span></Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label>Unit <span className="text-destructive">*</span></Label>
@@ -77,10 +75,7 @@ export function QuickAddProduct({
             </select>
           </div>
         </div>
-        <div className="space-y-1.5">
-          <Label>Name <span className="text-destructive">*</span></Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} required />
-        </div>
+        <p className="text-xs text-muted-foreground">SKU is generated automatically on save.</p>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Sale price</Label>
@@ -102,7 +97,7 @@ export function QuickAddProduct({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" disabled={saving || !sku.trim() || !name.trim() || !uomId}>
+          <Button type="submit" disabled={saving || !name.trim() || !uomId}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create product
           </Button>

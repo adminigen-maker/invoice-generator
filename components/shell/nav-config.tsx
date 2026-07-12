@@ -58,10 +58,10 @@ const NAV: NavItem[] = [
   { area: "master", section: "Catalog", label: "Inventory", href: "/inventory", icon: Boxes, color: "text-lime-600", perm: P.inventory.stockView },
   { area: "master", section: "Partners", label: "Customers", href: "/customers", icon: Users, color: "text-cyan-600", perm: P.sales.customerView },
   { area: "master", section: "Partners", label: "Vendors", href: "/vendors", icon: Building2, color: "text-fuchsia-500", perm: P.procurement.vendorView },
+  { area: "master", section: "Configuration", label: "Reference data", href: "/settings/reference", icon: Database, color: "text-indigo-500", perm: P.admin.companyEdit },
 
   { area: "admin", section: "Access", label: "Roles & Users", href: "/settings/roles", icon: Shield, color: "text-rose-500", perm: P.admin.rolesView },
   { area: "admin", section: "Configuration", label: "Settings", href: "/settings", icon: Settings, color: "text-slate-500", perm: P.admin.companyEdit },
-  { area: "admin", section: "Configuration", label: "Reference data", href: "/settings/reference", icon: Database, color: "text-indigo-500", perm: P.admin.companyEdit },
   { area: "admin", section: "Configuration", label: "Usage & Limits", href: "/settings/usage", icon: Gauge, color: "text-teal-500", perm: P.admin.companyEdit },
   { area: "admin", section: "Monitoring", label: "Audit log", href: "/settings/audit", icon: History, color: "text-amber-600", perm: P.admin.auditView },
 ];

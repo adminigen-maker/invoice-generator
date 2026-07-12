@@ -99,7 +99,7 @@ export default async function DeliveryNotesPage({
                 <TableRow key={r.id}>
                   <RowCheck id={r.id} />
                   <TableCell className="font-mono text-xs">
-                    <Link href={`/delivery-notes/${r.id}`} className="hover:underline">{r.number}</Link>
+                    <Link href={`/delivery-notes/${r.id}`} className="text-blue-600 hover:text-blue-700">{r.number}</Link>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{so?.number ?? "—"}</TableCell>
                   <TableCell>{so?.customer?.name ?? "—"}</TableCell>

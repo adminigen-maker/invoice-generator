@@ -104,7 +104,7 @@ export default async function VendorsPage({
                 <TableCell className="font-mono text-xs">{v.code}</TableCell>
                 <TableCell className="font-medium">
                   {perms.has(P.procurement.vendorEdit) ? (
-                    <Link href={`/vendors/${v.id}`} className="hover:underline">{v.name}</Link>
+                    <Link href={`/vendors/${v.id}`} className="text-blue-600 hover:text-blue-700">{v.name}</Link>
                   ) : v.name}
                 </TableCell>
                 <TableCell className="font-mono text-xs">{v.tax_registration_number ?? "—"}</TableCell>

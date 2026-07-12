@@ -94,7 +94,7 @@ export default async function SalesOrdersPage({
               <TableRow key={r.id}>
                 <RowCheck id={r.id} />
                 <TableCell className="font-mono text-xs">
-                  <Link href={`/sales-orders/${r.id}`} className="hover:underline">{r.number}</Link>
+                  <Link href={`/sales-orders/${r.id}`} className="text-blue-600 hover:text-blue-700">{r.number}</Link>
                 </TableCell>
                 <TableCell className="font-medium">{(r.customer as { name?: string } | null)?.name ?? "—"}</TableCell>
                 <TableCell>{formatDate(r.order_date)}</TableCell>

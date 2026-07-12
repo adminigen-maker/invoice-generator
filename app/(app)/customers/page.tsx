@@ -104,7 +104,7 @@ export default async function CustomersPage({
                 <TableCell className="font-mono text-xs">{c.code}</TableCell>
                 <TableCell className="font-medium">
                   {perms.has(P.sales.customerEdit) ? (
-                    <Link href={`/customers/${c.id}`} className="hover:underline">{c.name}</Link>
+                    <Link href={`/customers/${c.id}`} className="text-blue-600 hover:text-blue-700">{c.name}</Link>
                   ) : c.name}
                 </TableCell>
                 <TableCell className="font-mono text-xs">{c.tax_registration_number ?? "—"}</TableCell>

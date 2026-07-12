@@ -57,7 +57,7 @@ export default async function DeliveryNotePage({ params }: { params: Promise<{ i
           { label: "Customer", value: so?.customer?.name ?? "—" },
           {
             label: "Sales order",
-            value: so?.id ? <Link href={`/sales-orders/${so.id}`} className="underline">{so.number}</Link> : (so?.number ?? "—"),
+            value: so?.id ? <Link href={`/sales-orders/${so.id}`} className="text-blue-600 hover:text-blue-700">{so.number}</Link> : (so?.number ?? "—"),
           },
           { label: "Delivery date", value: formatDate(dn.delivery_date) },
           { label: "Warehouse", value: (dn.warehouse as { name?: string } | null)?.name ?? "—" },

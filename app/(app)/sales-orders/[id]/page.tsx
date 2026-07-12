@@ -84,7 +84,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
           {
             label: "From quotation",
             value: quote?.number ? (
-              <Link className="underline" href={`/quotations?q=${quote.number}`}>{quote.number}</Link>
+              <Link className="text-blue-600 hover:text-blue-700" href={`/quotations?q=${quote.number}`}>{quote.number}</Link>
             ) : "—",
           },
           { label: "Currency", value: so.currency ?? "AED" },
@@ -156,7 +156,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
                 <ul className="text-sm divide-y">
                   {dnotes.map((d) => (
                     <li key={d.id} className="flex items-center justify-between py-2">
-                      <Link href={`/delivery-notes/${d.id}`} className="font-mono text-xs hover:underline">{d.number}</Link>
+                      <Link href={`/delivery-notes/${d.id}`} className="font-mono text-xs text-blue-600 hover:text-blue-700">{d.number}</Link>
                       <div className="flex items-center gap-3">
                         <StatusBadge status={d.status} />
                         <span className="text-xs text-muted-foreground">{formatDate(d.delivery_date)}</span>
@@ -176,7 +176,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
                 <ul className="text-sm divide-y">
                   {invs.map((iv) => (
                     <li key={iv.id} className="flex items-center justify-between py-2">
-                      <Link href={`/invoices/${iv.id}`} className="font-mono text-xs hover:underline">{iv.number}</Link>
+                      <Link href={`/invoices/${iv.id}`} className="font-mono text-xs text-blue-600 hover:text-blue-700">{iv.number}</Link>
                       <div className="flex items-center gap-3">
                         <StatusBadge status={iv.status} />
                         <span className="font-mono text-xs">{formatMoney(iv.total, iv.currency)}</span>

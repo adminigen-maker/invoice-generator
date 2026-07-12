@@ -83,7 +83,7 @@ export default async function Dashboard() {
                 {ops!.overdue_list.map((i) => (
                   <li key={i.id} className="flex items-center justify-between py-2 gap-2">
                     <div className="min-w-0">
-                      <Link href={`/invoices/${i.id}`} className="font-mono text-xs hover:underline">{i.number}</Link>
+                      <Link href={`/invoices/${i.id}`} className="font-mono text-xs text-blue-600 hover:text-blue-700">{i.number}</Link>
                       <div className="text-muted-foreground truncate">{i.customer}</div>
                     </div>
                     <div className="text-right shrink-0">

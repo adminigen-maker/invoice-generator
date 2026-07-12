@@ -105,7 +105,7 @@ export default async function QuotationsPage({
               <TableRow key={quote.id}>
                 <RowCheck id={quote.id} />
                 <TableCell className="font-mono text-xs">
-                  <Link href={`/quotations/${quote.id}`} className="hover:underline">{quote.number}</Link>
+                  <Link href={`/quotations/${quote.id}`} className="text-blue-600 hover:text-blue-700">{quote.number}</Link>
                 </TableCell>
                 <TableCell className="font-medium">
                   {(quote.customer as { name?: string } | null)?.name ?? "—"}

@@ -66,7 +66,16 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
   return (
     <>
     <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-      <Field label="SKU"><Input name="sku" defaultValue={initial?.sku ?? ""} placeholder={isEdit ? undefined : "Auto‑generated if left blank"} /></Field>
+      <Field label="SKU">
+        {isEdit ? (
+          <>
+            <Input value={initial?.sku ?? ""} disabled readOnly />
+            <input type="hidden" name="sku" value={initial?.sku ?? ""} />
+          </>
+        ) : (
+          <Input disabled value="" placeholder="Generated automatically on save (SKU‑…)" />
+        )}
+      </Field>
       <Field label="Name" required><Input name="name" defaultValue={initial?.name ?? ""} required /></Field>
 
       <Field label="Category" span={2}>

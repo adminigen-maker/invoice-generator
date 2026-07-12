@@ -101,7 +101,7 @@ export default async function ProductsPage({
                 <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
                   {q ? `No products match “${q}”.` : "No products here. "}
                   {!q && perms.has(P.inventory.productCreate) && (
-                    <Link className="underline" href="/products/new">Create the first one</Link>
+                    <Link className="text-blue-600 hover:text-blue-700" href="/products/new">Create the first one</Link>
                   )}
                 </TableCell>
               </TableRow>
@@ -112,7 +112,7 @@ export default async function ProductsPage({
                 <TableCell className="font-mono text-xs">{p.sku}</TableCell>
                 <TableCell className="font-medium">
                   {perms.has(P.inventory.productEdit) ? (
-                    <Link href={`/products/${p.id}`} className="hover:underline">{p.name}</Link>
+                    <Link href={`/products/${p.id}`} className="text-blue-600 hover:text-blue-700">{p.name}</Link>
                   ) : p.name}
                 </TableCell>
                 <TableCell>{(p.category as { name?: string } | null)?.name ?? "—"}</TableCell>
