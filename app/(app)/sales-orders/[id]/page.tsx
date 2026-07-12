@@ -27,18 +27,22 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
   const supabase = await createClient();
   const perms = await getPermissions();
 
-  const { data: so } = await supabase
-    .from("sales_order")
-    .select(`
-      *,
-      customer:customer(name, code),
-      quotation:quotation(number),
-      lines:sales_order_line(sequence, description, product:product(sku,name), uom:unit_of_measure(code),
-        quantity_ordered, quantity_delivered, quantity_invoiced, unit_price, discount_pct, line_total,
-        tax:tax_rate(code))
-    `)
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: so }, { data: deliveryNotes }, { data: invoices }] = await Promise.all([
+    supabase
+      .from("sales_order")
+      .select(`
+        *,
+        customer:customer(name, code),
+        quotation:quotation(number),
+        lines:sales_order_line(sequence, description, product:product(sku,name), uom:unit_of_measure(code),
+          quantity_ordered, quantity_delivered, quantity_invoiced, unit_price, discount_pct, line_total,
+          tax:tax_rate(code))
+      `)
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("delivery_note").select("id, number, status, delivery_date").eq("sales_order_id", id).order("delivery_date"),
+    supabase.from("invoice").select("id, number, status, total, currency, invoice_date").eq("sales_order_id", id).order("invoice_date"),
+  ]);
   if (!so) return notFound();
 
   const canDeliver = perms.has(P.inventory.deliveryCreate);
@@ -52,9 +56,10 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
   const invoicedPct = ordered > 0 ? Math.round((invoiced / ordered) * 100) : 0;
 
   const anyOutstandingDelivery = lines.some((l) => Number(l.quantity_ordered) > Number(l.quantity_delivered));
-  const anyOutstandingInvoice = lines.some((l) => Number(l.quantity_delivered) > Number(l.quantity_invoiced));
 
   const quote = so.quotation as { number?: string } | null;
+  const dnotes = (deliveryNotes ?? []) as { id: string; number: string; status: string; delivery_date: string }[];
+  const invs = (invoices ?? []) as { id: string; number: string; status: string; total: number; currency: string }[];
 
   return (
     <div className="space-y-4 max-w-6xl">
@@ -68,8 +73,7 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
         </div>
         <CreateFromSOButtons
           salesOrderId={so.id}
-          canDeliver={canDeliver && anyOutstandingDelivery}
-          canInvoice={canInvoice && anyOutstandingInvoice}
+          canCreate={canDeliver && canInvoice && anyOutstandingDelivery}
         />
       </div>
 
@@ -140,6 +144,51 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
           </div>
         </CardContent>
       </Card>
+
+      {(dnotes.length > 0 || invs.length > 0) && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Delivery notes</CardTitle></CardHeader>
+            <CardContent>
+              {dnotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None yet.</p>
+              ) : (
+                <ul className="text-sm divide-y">
+                  {dnotes.map((d) => (
+                    <li key={d.id} className="flex items-center justify-between py-2">
+                      <Link href={`/delivery-notes/${d.id}`} className="font-mono text-xs hover:underline">{d.number}</Link>
+                      <div className="flex items-center gap-3">
+                        <StatusBadge status={d.status} />
+                        <span className="text-xs text-muted-foreground">{formatDate(d.delivery_date)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Invoices</CardTitle></CardHeader>
+            <CardContent>
+              {invs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None yet.</p>
+              ) : (
+                <ul className="text-sm divide-y">
+                  {invs.map((iv) => (
+                    <li key={iv.id} className="flex items-center justify-between py-2">
+                      <Link href={`/invoices/${iv.id}`} className="font-mono text-xs hover:underline">{iv.number}</Link>
+                      <div className="flex items-center gap-3">
+                        <StatusBadge status={iv.status} />
+                        <span className="font-mono text-xs">{formatMoney(iv.total, iv.currency)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
