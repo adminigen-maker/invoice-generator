@@ -17,6 +17,7 @@ import {
   LayoutGrid,
   Database,
   Cog,
+  Gauge,
   Check,
   ChevronsUpDown,
 } from "lucide-react";
@@ -51,6 +52,7 @@ const NAV: NavItem[] = [
 
   { area: "admin", section: "Access", label: "Roles & Users", href: "/settings/roles", icon: Shield, color: "text-rose-500", perm: P.admin.rolesView },
   { area: "admin", section: "Configuration", label: "Settings", href: "/settings", icon: Settings, color: "text-slate-500", perm: P.admin.companyEdit },
+  { area: "admin", section: "Configuration", label: "Usage & Limits", href: "/settings/usage", icon: Gauge, color: "text-teal-500", perm: P.admin.companyEdit },
 ];
 
 const AREAS: { key: AreaKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
