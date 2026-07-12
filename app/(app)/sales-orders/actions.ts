@@ -122,9 +122,12 @@ export async function createDeliveryAndInvoiceFromSO(
     if (dnlErr) return { ok: false, error: dnlErr.message };
     const dnLineBySoLine = new Map((dnLines ?? []).map((d: { id: string; sales_order_line_id: string }) => [d.sales_order_line_id, d.id]));
 
-    // Post the delivery note → issues stock (warehouse → customer)
-    const { error: postErr } = await supabase.from("delivery_note").update({ posted_at: new Date().toISOString(), status: "delivered" }).eq("id", dn.id);
-    if (postErr) return { ok: false, error: postErr.message };
+    // NOTE: the delivery note is left as DRAFT — it is NOT auto-posted here.
+    // Stock is issued only when someone posts the delivery note (the "Post"
+    // button on its page), so the user controls when goods actually ship.
+    // The invoice lines below are still linked to these DN lines, so the
+    // invoice never deducts stock a second time — the DN is the single source
+    // of the stock movement.
 
     // Invoice + lines (linked to DN lines so stock isn't deducted a second time)
     const taxIds = Array.from(new Set(outstanding.map(({ l }) => l.tax_id).filter(Boolean))) as string[];

@@ -28,7 +28,7 @@ export function CreateFromSOButtons({
             toast.error(res.error);
             return;
           }
-          toast.success("Delivery note & invoice created — stock updated");
+          toast.success("Draft delivery note & invoice created — post the delivery note to ship & reduce stock");
           router.refresh();
         })
       }

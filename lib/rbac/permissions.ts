@@ -13,6 +13,7 @@ export const P = {
     companyEdit: "admin.company.edit",
     sequenceEdit: "admin.sequence.edit",
     taxEdit: "admin.tax.edit",
+    statusOverride: "admin.status.override",
   },
   sales: {
     customerView: "sales.customer.view",

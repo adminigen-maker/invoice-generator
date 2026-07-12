@@ -6,6 +6,7 @@ import { P } from "@/lib/rbac/permissions";
 import { formatDate, formatMoney } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
+import { StatusOverride } from "@/components/status-override";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DocMetaGrid, DocStatGrid } from "@/components/doc-detail";
 import { CreateFromSOButtons } from "./actions-client";
@@ -73,9 +74,11 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
         </div>
         <CreateFromSOButtons
           salesOrderId={so.id}
-          canCreate={canDeliver && canInvoice && anyOutstandingDelivery}
+          canCreate={canDeliver && canInvoice && anyOutstandingDelivery && dnotes.length === 0}
         />
       </div>
+
+      {perms.has(P.admin.statusOverride) && <StatusOverride entity="sales_order" id={so.id} current={so.status} />}
 
       <DocMetaGrid
         items={[
