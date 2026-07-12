@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AdjustStockButton } from "./adjust-stock-button";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function InventoryPage() {
   if (!(await can(P.inventory.stockView))) redirect("/");
 
   const supabase = await createClient();
+  const canAdjust = await can(P.inventory.stockAdjust);
   const { data } = await supabase.rpc("stock_on_hand");
   const rows = ((data as StockRow[] | null) ?? []).map((r) => ({ ...r, on_hand: Number(r.on_hand) }));
 
@@ -59,12 +61,13 @@ export default async function InventoryPage() {
               <TableHead className="text-right">Reorder point</TableHead>
               {hasCost && <TableHead className="text-right">Value</TableHead>}
               <TableHead>Status</TableHead>
+              {canAdjust && <TableHead className="text-right w-28">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={hasCost ? 7 : 6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={(hasCost ? 7 : 6) + (canAdjust ? 1 : 0)} className="text-center text-muted-foreground py-8">
                   No stockable products yet.
                 </TableCell>
               </TableRow>
@@ -94,6 +97,11 @@ export default async function InventoryPage() {
                       <Badge variant="success">In stock</Badge>
                     )}
                   </TableCell>
+                  {canAdjust && (
+                    <TableCell className="text-right">
+                      <AdjustStockButton productId={r.product_id} name={r.name} currentQty={r.on_hand} uom={r.uom} />
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
