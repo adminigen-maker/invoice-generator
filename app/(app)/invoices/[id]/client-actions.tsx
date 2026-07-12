@@ -1,12 +1,55 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Ban, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { postInvoice, recordPayment } from "../actions";
+import { Dialog } from "@/components/ui/dialog";
+import { postInvoice, recordPayment, cancelInvoice } from "../actions";
+
+export function CancelInvoiceButton({ id }: { id: string }) {
+  const router = useRouter();
+  const [pending, startTx] = useTransition();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="destructive" onClick={() => setOpen(true)}>
+        <Ban className="h-4 w-4 mr-2" />Cancel
+      </Button>
+      <Dialog
+        open={open}
+        onClose={() => !pending && setOpen(false)}
+        title="Cancel this invoice?"
+        description="Its status becomes “Cancelled”. Only draft invoices can be cancelled."
+      >
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>Keep it</Button>
+          <Button
+            variant="destructive"
+            disabled={pending}
+            onClick={() =>
+              startTx(async () => {
+                const res = await cancelInvoice(id);
+                if (!res.ok) toast.error(res.error);
+                else {
+                  toast.success("Invoice cancelled");
+                  setOpen(false);
+                  router.refresh();
+                }
+              })
+            }
+          >
+            {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Cancel invoice
+          </Button>
+        </div>
+      </Dialog>
+    </>
+  );
+}
 
 export function PostInvoiceButton({ id }: { id: string }) {
   const [pending, startTx] = useTransition();

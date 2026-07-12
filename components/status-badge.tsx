@@ -10,6 +10,7 @@ const map: Record<string, { label: string; variant: "default" | "success" | "war
   invoiced:             { label: "Invoiced",            variant: "info" },
   partially_paid:       { label: "Partially paid",      variant: "warning" },
   paid:                 { label: "Paid",                variant: "success" },
+  overdue:              { label: "Overdue",             variant: "destructive" },
   cancelled:            { label: "Cancelled",           variant: "destructive" },
   closed:               { label: "Closed",              variant: "secondary" },
 };

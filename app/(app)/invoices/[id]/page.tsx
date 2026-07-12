@@ -9,56 +9,106 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PostInvoiceButton, RecordPaymentForm } from "./client-actions";
+import { PostInvoiceButton, RecordPaymentForm, CancelInvoiceButton } from "./client-actions";
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const [{ data: inv }, canPost, canPay] = await Promise.all([
+  const [{ data: inv }, canPost, canPay, canCancel] = await Promise.all([
     supabase.from("invoice").select(`
       *,
       customer:customer(name, code, tax_registration_number),
-      lines:invoice_line(sequence, description, product:product(sku), uom:unit_of_measure(code),
+      lines:invoice_line(sequence, description, product:product(sku, name), uom:unit_of_measure(code),
         quantity, unit_price, discount_pct, line_total, tax:tax_rate(code, rate)),
-      allocations:payment_allocation(amount_allocated, payment:payment(number, payment_date, method))
+      allocations:payment_allocation(amount_allocated, payment:payment(number, payment_date, method, reference))
     `).eq("id", id).maybeSingle(),
     can(P.invoice.post),
     can(P.invoice.paymentCreate),
+    can(P.invoice.edit),
   ]);
   if (!inv) return notFound();
 
   const posted = !!inv.posted_at;
+  const total = Number(inv.total ?? 0);
+  const paid = Number(inv.amount_paid ?? 0);
+  const balance = Number(inv.balance ?? 0);
+  const paidPct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+  const overdue = posted && balance > 0.001 && !!inv.due_date && new Date(inv.due_date) < new Date();
+  const isDraft = inv.status === "draft";
+
+  const lines = ((inv.lines ?? []) as LineRow[]).slice().sort((a, b) => a.sequence - b.sequence);
+  const allocations = (inv.allocations ?? []) as AllocRow[];
 
   return (
     <div className="space-y-4 max-w-6xl">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-3">
             {inv.number}
-            <StatusBadge status={inv.status} />
+            <StatusBadge status={overdue ? "overdue" : inv.status} />
           </h1>
           <p className="text-sm text-muted-foreground">
-            {(inv.customer as { name?: string } | null)?.name} · Issued {formatDate(inv.invoice_date)}
-            {inv.due_date && <> · Due {formatDate(inv.due_date)}</>}
+            {inv.sales_order_id ? "From a sales order" : "Standalone invoice"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
             <Link href={`/invoices/${id}/pdf`} target="_blank">
               <FileDown className="h-4 w-4 mr-2" />PDF
             </Link>
           </Button>
           {!posted && canPost && <PostInvoiceButton id={inv.id} />}
+          {isDraft && canCancel && <CancelInvoiceButton id={inv.id} />}
         </div>
       </div>
 
+      {/* Meta row */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Lines</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-6">
+          <Meta label="Customer" value={(inv.customer as { name?: string } | null)?.name ?? "—"} />
+          <Meta label="Invoice date" value={formatDate(inv.invoice_date)} />
+          <Meta
+            label="Due date"
+            value={inv.due_date ? formatDate(inv.due_date) : "—"}
+            danger={overdue}
+            suffix={overdue ? "Overdue" : undefined}
+          />
+          <div className="space-y-1.5">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Payment progress</div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${paidPct >= 100 ? "bg-emerald-500" : "bg-primary"}`}
+                  style={{ width: `${Math.max(paidPct, paidPct > 0 ? 4 : 0)}%` }}
+                />
+              </div>
+              <span className="text-sm font-medium tabular-nums">{paidPct}%</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard label="Invoice total" value={formatMoney(total, inv.currency)} />
+        <StatCard label="Amount paid" value={formatMoney(paid, inv.currency)} tone="success" />
+        <StatCard
+          label="Amount due"
+          value={formatMoney(balance, inv.currency)}
+          tone={balance > 0.001 ? "danger" : "success"}
+        />
+      </div>
+
+      {/* Lines */}
+      <Card>
+        <CardHeader><CardTitle className="text-base">Invoice lines</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Description</TableHead>
+                <TableHead className="w-8">#</TableHead>
+                <TableHead>Item</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
                 <TableHead className="text-right">Unit price</TableHead>
                 <TableHead className="text-right">Disc %</TableHead>
@@ -67,16 +117,14 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(inv.lines ?? []).sort((a: { sequence: number }, b: { sequence: number }) => a.sequence - b.sequence).map((l: {
-                sequence: number; description: string;
-                product?: { sku?: string } | null;
-                uom?: { code?: string } | null;
-                tax?: { code?: string; rate?: number } | null;
-                quantity: number; unit_price: number; discount_pct: number; line_total: number;
-              }, i: number) => (
+              {lines.map((l, i) => (
                 <TableRow key={i}>
+                  <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell>
-                    {l.description}
+                    <div className="font-medium">{l.product?.name ?? l.description}</div>
+                    {l.product?.name && l.description && l.description !== l.product.name && (
+                      <div className="text-xs text-muted-foreground">{l.description}</div>
+                    )}
                     {l.product?.sku && <div className="text-xs text-muted-foreground font-mono">{l.product.sku}</div>}
                   </TableCell>
                   <TableCell className="text-right font-mono">{Number(l.quantity).toFixed(2)} {l.uom?.code}</TableCell>
@@ -88,54 +136,106 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               ))}
             </TableBody>
           </Table>
+
+          <div className="flex justify-end pt-4">
+            <div className="w-full max-w-xs space-y-2 text-sm">
+              <Row label="Subtotal" value={formatMoney(inv.subtotal, inv.currency)} />
+              {Number(inv.discount_total) > 0 && (
+                <Row label="Discount" value={`− ${formatMoney(inv.discount_total, inv.currency)}`} />
+              )}
+              <Row label="Tax (VAT)" value={formatMoney(inv.tax_total, inv.currency)} />
+              <div className="border-t pt-2 flex justify-between font-semibold text-base">
+                <span>Grand total</span>
+                <span className="font-mono">{formatMoney(total, inv.currency)}</span>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader><CardTitle className="text-base">Payments</CardTitle></CardHeader>
-          <CardContent>
-            {((inv.allocations ?? []) as Array<{ amount_allocated: number; payment?: { number?: string; payment_date?: string; method?: string } | null }>).length === 0 && (
-              <p className="text-sm text-muted-foreground">No payments recorded.</p>
-            )}
-            <ul className="space-y-2">
-              {((inv.allocations ?? []) as Array<{ amount_allocated: number; payment?: { number?: string; payment_date?: string; method?: string } | null }>).map((a, i) => (
-                <li key={i} className="flex justify-between text-sm">
-                  <span>
-                    <span className="font-mono text-xs">{a.payment?.number}</span>
-                    {" · "}
-                    <span>{formatDate(a.payment?.payment_date)}</span>
-                    {" · "}
-                    <span className="capitalize">{a.payment?.method?.replace("_", " ")}</span>
-                  </span>
-                  <span className="font-mono">{formatMoney(a.amount_allocated, inv.currency)}</span>
-                </li>
-              ))}
-            </ul>
-            {posted && canPay && Number(inv.balance) > 0 && (
-              <div className="mt-4 border-t pt-4">
-                <RecordPaymentForm invoiceId={inv.id} balance={Number(inv.balance)} currency={inv.currency} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Payment history + record payment */}
+      <Card>
+        <CardHeader><CardTitle className="text-base">Payment history</CardTitle></CardHeader>
+        <CardContent>
+          {allocations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Payment #</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allocations.map((a, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-mono text-xs">{a.payment?.number ?? "—"}</TableCell>
+                    <TableCell>{formatDate(a.payment?.payment_date)}</TableCell>
+                    <TableCell className="capitalize">{a.payment?.method?.replace("_", " ") ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{a.payment?.reference ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-emerald-600">
+                      {formatMoney(a.amount_allocated, inv.currency)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
 
-        <Card>
-          <CardContent className="pt-6 space-y-2 text-sm">
-            <Row label="Subtotal" value={formatMoney(inv.subtotal, inv.currency)} />
-            <Row label="Discount" value={`− ${formatMoney(inv.discount_total, inv.currency)}`} />
-            <Row label="Tax" value={formatMoney(inv.tax_total, inv.currency)} />
-            <div className="border-t pt-2 flex justify-between font-semibold text-base">
-              <span>Total</span><span className="font-mono">{formatMoney(inv.total, inv.currency)}</span>
+          {posted && canPay && balance > 0.001 && (
+            <div className="mt-4 border-t pt-4">
+              <div className="text-sm font-medium mb-3">Record a payment</div>
+              <RecordPaymentForm invoiceId={inv.id} balance={balance} currency={inv.currency} />
             </div>
-            <Row label="Paid" value={formatMoney(inv.amount_paid, inv.currency)} />
-            <div className="border-t pt-2 flex justify-between font-semibold">
-              <span>Balance</span><span className="font-mono">{formatMoney(inv.balance, inv.currency)}</span>
-            </div>
-          </CardContent>
-        </Card>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+type LineRow = {
+  sequence: number;
+  description: string;
+  product?: { sku?: string; name?: string } | null;
+  uom?: { code?: string } | null;
+  tax?: { code?: string; rate?: number } | null;
+  quantity: number;
+  unit_price: number;
+  discount_pct: number;
+  line_total: number;
+};
+
+type AllocRow = {
+  amount_allocated: number;
+  payment?: { number?: string; payment_date?: string; method?: string; reference?: string } | null;
+};
+
+function Meta({ label, value, danger, suffix }: { label: string; value: string; danger?: boolean; suffix?: string }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`text-sm font-medium ${danger ? "text-destructive" : ""}`}>
+        {value}
+        {suffix && <span className="ml-1 text-xs">({suffix})</span>}
       </div>
     </div>
+  );
+}
+
+function StatCard({ label, value, tone }: { label: string; value: string; tone?: "success" | "danger" }) {
+  const color = tone === "success" ? "text-emerald-600" : tone === "danger" ? "text-destructive" : "";
+  return (
+    <Card>
+      <CardContent className="pt-6 text-center">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className={`mt-1 text-2xl font-semibold tracking-tight font-mono ${color}`}>{value}</div>
+      </CardContent>
+    </Card>
   );
 }
 
