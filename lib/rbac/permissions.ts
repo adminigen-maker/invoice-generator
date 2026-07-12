@@ -46,6 +46,12 @@ export const P = {
     deliveryDelete: "inventory.delivery.delete",
     receiptCreate: "inventory.receipt.create",
   },
+  procurement: {
+    vendorView: "procurement.vendor.view",
+    vendorCreate: "procurement.vendor.create",
+    vendorEdit: "procurement.vendor.edit",
+    vendorDelete: "procurement.vendor.delete",
+  },
   invoice: {
     view: "invoice.view",
     create: "invoice.create",

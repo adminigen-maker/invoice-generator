@@ -1993,3 +1993,167 @@ grant execute on function public.admin_usage_stats() to authenticated;
 insert into public.document_sequence (code, prefix, format, padding, next_number, reset_yearly)
 select 'product', 'SKU', '{PREFIX}-{SEQ}', 5, 1, false
 where not exists (select 1 from public.document_sequence where code = 'product');
+
+
+-- ## SOURCE: db/migrations/0023_procurement_vendor_perms_rls.sql
+
+-- =====================================================================
+-- 0023 · Procurement module: vendor permissions + RLS
+--
+-- The vendor table had RLS enabled but NO policies (it was locked). Adds the
+-- procurement.vendor.* permissions (granted to admin) and read/insert/update/
+-- delete policies, mirroring the customer master.
+-- =====================================================================
+insert into public.app_permission (code, module, action, description) values
+  ('procurement.vendor.view',   'procurement', 'view',   'View vendors'),
+  ('procurement.vendor.create', 'procurement', 'create', 'Create vendors'),
+  ('procurement.vendor.edit',   'procurement', 'edit',   'Edit vendors'),
+  ('procurement.vendor.delete', 'procurement', 'delete', 'Delete vendors')
+on conflict (code) do nothing;
+
+insert into public.role_permission (role_id, permission_id)
+select r.id, p.id from public.role r, public.app_permission p
+where r.code = 'admin' and p.module = 'procurement'
+on conflict (role_id, permission_id) do nothing;
+
+drop policy if exists vendor_read on public.vendor;
+create policy vendor_read on public.vendor for select to authenticated
+  using (public.has_permission('procurement.vendor.view') and public.scope_allows(created_by, 'procurement'));
+
+drop policy if exists vendor_insert on public.vendor;
+create policy vendor_insert on public.vendor for insert to authenticated
+  with check (public.has_permission('procurement.vendor.create'));
+
+drop policy if exists vendor_update on public.vendor;
+create policy vendor_update on public.vendor for update to authenticated
+  using (public.has_permission('procurement.vendor.edit') and public.scope_allows(created_by, 'procurement'))
+  with check (public.has_permission('procurement.vendor.edit'));
+
+drop policy if exists vendor_delete on public.vendor;
+create policy vendor_delete on public.vendor for delete to authenticated
+  using (public.has_permission('procurement.vendor.delete') and public.scope_allows(created_by, 'procurement'));
+
+
+-- ## SOURCE: db/migrations/0024_stock_on_hand_rpc.sql
+
+-- =====================================================================
+-- 0024 · stock_on_hand() RPC for the Inventory screen
+--
+-- Per-product on hand = quantity moved INTO 'stock' locations minus quantity
+-- moved OUT of them. SECURITY DEFINER, gated by inventory.stock.view; cost/value
+-- only included when the caller holds inventory.product.view_cost.
+-- =====================================================================
+create or replace function public.stock_on_hand()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare result jsonb; show_cost boolean;
+begin
+  if not public.has_permission('inventory.stock.view') then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  show_cost := public.has_permission('inventory.product.view_cost');
+
+  select coalesce(jsonb_agg(row_to_json(t) order by t.name), '[]'::jsonb) into result
+  from (
+    select
+      p.id as product_id, p.sku, p.name, u.code as uom,
+      (
+        coalesce((select sum(sm.quantity) from stock_move sm
+                    join location dl on dl.id = sm.dest_location_id
+                  where sm.product_id = p.id and dl.kind = 'stock'), 0)
+        - coalesce((select sum(sm.quantity) from stock_move sm
+                    join location sl on sl.id = sm.source_location_id
+                   where sm.product_id = p.id and sl.kind = 'stock'), 0)
+      ) as on_hand,
+      p.reorder_point,
+      case when show_cost then p.cost_price else null end as cost_price
+    from product p
+    left join unit_of_measure u on u.id = p.uom_id
+    where p.is_stockable = true and p.is_active = true
+  ) t;
+
+  return result;
+end;
+$$;
+
+revoke execute on function public.stock_on_hand() from anon, public;
+grant execute on function public.stock_on_hand() to authenticated;
+
+
+-- ## SOURCE: db/migrations/0025_reports_summary_rpc.sql
+
+-- =====================================================================
+-- 0025 · reports_summary() RPC powering the Reports page
+--
+-- Returns totals, AR aging buckets, top products, top customers and a 12-month
+-- revenue trend. SECURITY DEFINER, gated by invoice.view.
+-- =====================================================================
+create or replace function public.reports_summary()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare result jsonb; today date := current_date;
+begin
+  if not public.has_permission('invoice.view') then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+
+  select jsonb_build_object(
+    'totals', (
+      select jsonb_build_object(
+        'invoice_count', count(*),
+        'revenue', coalesce(sum(total), 0),
+        'collected', coalesce(sum(amount_paid), 0),
+        'outstanding', coalesce(sum(balance), 0)
+      )
+      from invoice where status not in ('cancelled', 'draft')
+    ),
+    'ar_aging', (
+      select jsonb_build_object(
+        'not_due',  coalesce(sum(case when due_date >= today then balance else 0 end), 0),
+        'd1_30',    coalesce(sum(case when due_date < today and due_date >= today - 30 then balance else 0 end), 0),
+        'd31_60',   coalesce(sum(case when due_date < today - 30 and due_date >= today - 60 then balance else 0 end), 0),
+        'd60_plus', coalesce(sum(case when due_date < today - 60 then balance else 0 end), 0)
+      )
+      from invoice where balance > 0.001 and status not in ('cancelled', 'draft')
+    ),
+    'top_products', (
+      select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) from (
+        select coalesce(pr.name, il.description) as name,
+               sum(il.line_total) as revenue, sum(il.quantity) as qty
+        from invoice_line il
+        join invoice i on i.id = il.invoice_id and i.status not in ('cancelled', 'draft')
+        left join product pr on pr.id = il.product_id
+        group by coalesce(pr.name, il.description)
+        order by sum(il.line_total) desc
+        limit 8
+      ) x
+    ),
+    'top_customers', (
+      select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) from (
+        select c.name, sum(i.total) as revenue, count(*) as invoices
+        from invoice i join customer c on c.id = i.customer_id
+        where i.status not in ('cancelled', 'draft')
+        group by c.name order by sum(i.total) desc limit 8
+      ) y
+    ),
+    'revenue_by_month', (
+      select coalesce(jsonb_agg(row_to_json(z) order by z.month), '[]'::jsonb) from (
+        select to_char(date_trunc('month', invoice_date), 'YYYY-MM') as month, sum(total) as revenue
+        from invoice
+        where status not in ('cancelled', 'draft') and invoice_date >= (today - interval '12 months')
+        group by date_trunc('month', invoice_date)
+      ) z
+    )
+  ) into result;
+  return result;
+end;
+$$;
+
+revoke execute on function public.reports_summary() from anon, public;
+grant execute on function public.reports_summary() to authenticated;

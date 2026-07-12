@@ -1,0 +1,118 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { createClient } from "@/lib/db/supabase-server";
+import { getPermissions } from "@/lib/rbac/can";
+import { P } from "@/lib/rbac/permissions";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { ListToolbar } from "@/components/list-toolbar";
+import { RowActions } from "@/components/row-actions";
+import { setVendorActive, deleteVendor } from "./actions";
+import { ilikeTerm } from "@/lib/list-query";
+
+export const dynamic = "force-dynamic";
+
+export default async function VendorsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; view?: string }>;
+}) {
+  const { q, view = "active" } = await searchParams;
+  const supabase = await createClient();
+  const perms = await getPermissions();
+
+  let query = supabase
+    .from("vendor")
+    .select("id, code, name, tax_registration_number, payment_terms_days, currency, is_active")
+    .order("name")
+    .limit(200);
+
+  if (view === "active") query = query.eq("is_active", true);
+  else if (view === "inactive") query = query.eq("is_active", false);
+
+  const term = ilikeTerm(q);
+  if (term) query = query.or(`code.ilike.${term},name.ilike.${term},tax_registration_number.ilike.${term}`);
+
+  const { data: rows } = await query;
+
+  const canDeactivate = perms.has(P.procurement.vendorEdit);
+  const canDelete = perms.has(P.procurement.vendorDelete);
+  const showActions = canDeactivate || canDelete;
+  const colCount = 6 + (showActions ? 1 : 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Vendors</h1>
+          <p className="text-sm text-muted-foreground">Suppliers you purchase goods and services from</p>
+        </div>
+        {perms.has(P.procurement.vendorCreate) && (
+          <Button asChild>
+            <Link href="/vendors/new"><Plus className="h-4 w-4 mr-2" />New vendor</Link>
+          </Button>
+        )}
+      </div>
+
+      <ListToolbar searchPlaceholder="Search code, name or TRN…" />
+
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>TRN</TableHead>
+              <TableHead>Payment terms</TableHead>
+              <TableHead>Currency</TableHead>
+              <TableHead>Status</TableHead>
+              {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(rows ?? []).length === 0 && (
+              <TableRow>
+                <TableCell colSpan={colCount} className="text-center text-muted-foreground py-8">
+                  {q ? `No vendors match “${q}”.` : "No vendors here."}
+                </TableCell>
+              </TableRow>
+            )}
+            {(rows ?? []).map((v) => (
+              <TableRow key={v.id}>
+                <TableCell className="font-mono text-xs">{v.code}</TableCell>
+                <TableCell className="font-medium">
+                  {perms.has(P.procurement.vendorEdit) ? (
+                    <Link href={`/vendors/${v.id}`} className="hover:underline">{v.name}</Link>
+                  ) : v.name}
+                </TableCell>
+                <TableCell className="font-mono text-xs">{v.tax_registration_number ?? "—"}</TableCell>
+                <TableCell>Net {v.payment_terms_days ?? 30}</TableCell>
+                <TableCell>{v.currency ?? "AED"}</TableCell>
+                <TableCell>
+                  {v.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                </TableCell>
+                {showActions && (
+                  <TableCell>
+                    <RowActions
+                      id={v.id}
+                      isActive={!!v.is_active}
+                      entityLabel="vendor"
+                      canDeactivate={canDeactivate}
+                      canDelete={canDelete}
+                      setActive={setVendorActive}
+                      remove={deleteVendor}
+                    />
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
+  );
+}

@@ -18,6 +18,9 @@ import {
   Database,
   Cog,
   Gauge,
+  Building2,
+  Boxes,
+  BarChart3,
   Check,
   ChevronsUpDown,
 } from "lucide-react";
@@ -46,9 +49,12 @@ const NAV: NavItem[] = [
   { area: "operations", section: "Fulfilment", label: "Delivery Notes", href: "/delivery-notes", icon: Truck, color: "text-amber-500", perm: P.inventory.deliveryView },
   { area: "operations", section: "Finance", label: "Invoices", href: "/invoices", icon: Receipt, color: "text-emerald-500", perm: P.invoice.view },
   { area: "operations", section: "Finance", label: "Payments", href: "/payments", icon: CircleDollarSign, color: "text-green-600", perm: P.invoice.paymentView },
+  { area: "operations", section: "Analytics", label: "Reports", href: "/reports", icon: BarChart3, color: "text-teal-500", perm: P.invoice.view },
 
   { area: "master", section: "Catalog", label: "Products", href: "/products", icon: Package, color: "text-orange-500", perm: P.inventory.productView },
+  { area: "master", section: "Catalog", label: "Inventory", href: "/inventory", icon: Boxes, color: "text-lime-600", perm: P.inventory.stockView },
   { area: "master", section: "Partners", label: "Customers", href: "/customers", icon: Users, color: "text-cyan-600", perm: P.sales.customerView },
+  { area: "master", section: "Partners", label: "Vendors", href: "/vendors", icon: Building2, color: "text-fuchsia-500", perm: P.procurement.vendorView },
 
   { area: "admin", section: "Access", label: "Roles & Users", href: "/settings/roles", icon: Shield, color: "text-rose-500", perm: P.admin.rolesView },
   { area: "admin", section: "Configuration", label: "Settings", href: "/settings", icon: Settings, color: "text-slate-500", perm: P.admin.companyEdit },
