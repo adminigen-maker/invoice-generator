@@ -8,6 +8,7 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { deletePayment } from "./actions";
+import { RecordPaymentButton } from "./record-payment-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +33,33 @@ export default async function PaymentsPage({
   const { data: rows } = await query;
 
   const canDelete = perms.has(P.invoice.paymentDelete);
+  const canCreate = perms.has(P.invoice.paymentCreate);
+
+  const { data: openInv } = canCreate
+    ? await supabase
+        .from("invoice")
+        .select("id, number, balance, currency, customer:customer(name)")
+        .gt("balance", 0.001)
+        .not("status", "in", "(cancelled,draft)")
+        .order("invoice_date", { ascending: false })
+        .limit(100)
+    : { data: [] };
+  const openInvoices = ((openInv ?? []) as Array<{ id: string; number: string; balance: number; currency: string; customer: { name?: string } | null }>).map((i) => ({
+    id: i.id,
+    number: i.number,
+    balance: Number(i.balance),
+    currency: i.currency,
+    customer: i.customer?.name ?? "—",
+  }));
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
-        <p className="text-sm text-muted-foreground">Receipts from customers, allocated across invoices</p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
+          <p className="text-sm text-muted-foreground">Receipts from customers, allocated across invoices</p>
+        </div>
+        {canCreate && <RecordPaymentButton invoices={openInvoices} />}
       </div>
 
       <ListToolbar showViews={false} searchPlaceholder="Search number or reference…" />
