@@ -129,7 +129,7 @@ export function SidebarContent({
         {Array.from(sections.entries()).map(([section, items]) => (
           <div key={section}>
             {!collapsed && (
-              <div className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 {section}
               </div>
             )}
@@ -147,11 +147,11 @@ export function SidebarContent({
                         "flex items-center rounded-md transition-colors",
                         collapsed ? "justify-center h-10 w-10 mx-auto" : "gap-2.5 px-2 py-2 md:py-1.5",
                         active
-                          ? "bg-primary text-primary-foreground"
-                          : "text-foreground/75 hover:text-foreground hover:bg-accent"
+                          ? "bg-white text-slate-900 font-medium shadow-sm"
+                          : "text-slate-300 hover:text-white hover:bg-white/10"
                       )}
                     >
-                      <Icon className={cn("shrink-0", collapsed ? "h-5 w-5" : "h-4 w-4", !active && item.color)} />
+                      <Icon className={cn("shrink-0", collapsed ? "h-5 w-5" : "h-4 w-4", item.color)} />
                       {!collapsed && <span>{item.label}</span>}
                     </Link>
                   </li>
@@ -166,7 +166,7 @@ export function SidebarContent({
         const active = availableAreas.find((a) => a.key === activeArea) ?? availableAreas[0];
         const ActiveIcon = active.icon;
         return (
-          <div className="relative shrink-0 border-t p-2">
+          <div className="relative shrink-0 border-t border-slate-800 p-2">
             {/* "Change area" popup (opens upward, Dynamics-style) */}
             {menuOpen && (
               <>
@@ -209,19 +209,19 @@ export function SidebarContent({
               aria-expanded={menuOpen}
               title={collapsed ? `${active.label} · change area` : undefined}
               className={cn(
-                "flex items-center rounded-md hover:bg-accent transition-colors",
+                "flex items-center rounded-md hover:bg-white/10 transition-colors",
                 collapsed ? "justify-center h-10 w-10 mx-auto" : "w-full gap-2.5 px-2 py-2"
               )}
             >
               {collapsed ? (
-                <ActiveIcon className="h-5 w-5 text-primary" />
+                <ActiveIcon className="h-5 w-5 text-slate-200" />
               ) : (
                 <>
-                  <span className="h-7 w-7 rounded bg-primary text-primary-foreground grid place-items-center text-xs font-bold shrink-0">
+                  <span className="h-7 w-7 rounded bg-white/10 text-white grid place-items-center text-xs font-bold shrink-0">
                     {active.label.charAt(0)}
                   </span>
-                  <span className="flex-1 text-left text-sm font-semibold truncate">{active.label}</span>
-                  <ChevronsUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="flex-1 text-left text-sm font-semibold truncate text-white">{active.label}</span>
+                  <ChevronsUpDown className="h-4 w-4 text-slate-400 shrink-0" />
                 </>
               )}
             </button>

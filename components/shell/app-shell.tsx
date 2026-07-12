@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { InstallButton } from "@/components/install-button";
 import { SidebarContent } from "./nav-config";
@@ -70,30 +69,43 @@ export function AppShell({
           (the drawer takes over). */}
       <aside
         className={cn(
-          "hidden md:flex shrink-0 bg-background flex-col overflow-hidden border-r",
+          "hidden md:flex shrink-0 bg-slate-900 text-slate-100 flex-col overflow-hidden border-r border-slate-800",
           ready && "transition-[width] duration-200 ease-in-out",
           collapsed ? "w-16" : "w-60"
         )}
       >
-        <div className="h-14 flex items-center border-b shrink-0 w-full overflow-hidden">
-          <Link
-            href="/"
-            title="Invoice UAE"
-            className={cn(
-              "font-semibold tracking-tight whitespace-nowrap flex items-center",
-              collapsed ? "justify-center w-full" : "px-5"
-            )}
-          >
-            {collapsed ? (
-              <span className="h-8 w-8 rounded-md bg-primary text-primary-foreground grid place-items-center text-xs font-bold">
-                IU
-              </span>
-            ) : (
-              <>
-                Invoice <span className="text-muted-foreground ml-1">UAE</span>
-              </>
-            )}
-          </Link>
+        <div
+          className={cn(
+            "h-14 flex items-center border-b border-slate-800 shrink-0 w-full overflow-hidden",
+            collapsed ? "justify-center" : "justify-between pl-5 pr-2"
+          )}
+        >
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label="Show sidebar"
+              title="Show sidebar"
+              className="inline-grid h-9 w-9 place-items-center rounded-md text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          ) : (
+            <>
+              <Link href="/" title="Invoice UAE" className="font-semibold tracking-tight whitespace-nowrap">
+                Invoice <span className="text-slate-400 ml-1">UAE</span>
+              </Link>
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label="Hide sidebar"
+                title="Hide sidebar"
+                className="inline-grid h-9 w-9 place-items-center rounded-md shrink-0 text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            </>
+          )}
         </div>
         <div className="flex flex-1 flex-col min-h-0 w-full">
           <SidebarContent permissions={permissions} collapsed={collapsed} />
@@ -105,17 +117,6 @@ export function AppShell({
           <div className="flex items-center gap-1 min-w-0">
             {/* Mobile drawer trigger (below md) */}
             <MobileNav permissions={permissions} />
-            {/* Desktop collapse toggle (md and up) */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden md:inline-flex -ml-2"
-              onClick={toggle}
-              aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
-              title={collapsed ? "Show sidebar" : "Hide sidebar"}
-            >
-              {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-            </Button>
             <div className="text-sm text-muted-foreground truncate">
               <span className="hidden sm:inline">Signed in as </span>
               <span className="text-foreground font-medium">{userName}</span>

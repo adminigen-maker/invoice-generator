@@ -41,14 +41,19 @@ export function MobileNav({ permissions }: { permissions: string[] }) {
             className="absolute inset-0 bg-black/50 animate-in fade-in"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute left-0 top-0 h-full w-72 max-w-[80%] bg-background border-r shadow-xl flex flex-col animate-in slide-in-from-left duration-200">
-            <div className="h-14 flex items-center justify-between px-4 border-b">
+          <div className="absolute left-0 top-0 h-full w-72 max-w-[80%] bg-slate-900 text-slate-100 border-r border-slate-800 shadow-xl flex flex-col animate-in slide-in-from-left duration-200">
+            <div className="h-14 flex items-center justify-between px-4 border-b border-slate-800">
               <Link href="/" className="font-semibold tracking-tight" onClick={() => setOpen(false)}>
-                Invoice <span className="text-muted-foreground">UAE</span>
+                Invoice <span className="text-slate-400">UAE</span>
               </Link>
-              <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close menu">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close menu"
+                className="inline-grid h-9 w-9 place-items-center rounded-md text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+              >
                 <X className="h-5 w-5" />
-              </Button>
+              </button>
             </div>
             <SidebarContent permissions={permissions} onNavigate={() => setOpen(false)} />
           </div>
