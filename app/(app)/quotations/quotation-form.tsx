@@ -88,7 +88,12 @@ export function QuotationForm({
 
   const [customerId, setCustomerId] = useState(initial?.customer_id ?? "");
   const [quoteDate, setQuoteDate] = useState(initial?.quote_date ?? new Date().toISOString().slice(0, 10));
-  const [validUntil, setValidUntil] = useState(initial?.valid_until ?? "");
+  const [validUntil, setValidUntil] = useState<string>(() => {
+    if (initial?.valid_until) return initial.valid_until;
+    const d = new Date();
+    d.setDate(d.getDate() + 30); // default: valid for 30 days
+    return d.toISOString().slice(0, 10);
+  });
   const [currency, setCurrency] = useState(initial?.currency ?? "AED");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [terms, setTerms] = useState(initial?.terms ?? "");
@@ -161,11 +166,15 @@ export function QuotationForm({
   );
 
   async function onSave() {
+    if (!validUntil) {
+      toast.error("Please set a “Valid until” date");
+      return;
+    }
     startTx(async () => {
       const res = await saveQuotation(initial?.id ?? null, {
         customer_id: customerId,
         quote_date: quoteDate,
-        valid_until: validUntil || null,
+        valid_until: validUntil,
         currency,
         notes: notes || null,
         terms: terms || null,
@@ -242,8 +251,8 @@ export function QuotationForm({
           <Input type="date" value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} disabled={isReadOnly} />
         </div>
         <div className="space-y-1.5">
-          <Label>Valid until</Label>
-          <Input type="date" value={validUntil ?? ""} onChange={(e) => setValidUntil(e.target.value)} disabled={isReadOnly} />
+          <Label>Valid until <span className="text-destructive">*</span></Label>
+          <Input type="date" value={validUntil ?? ""} onChange={(e) => setValidUntil(e.target.value)} disabled={isReadOnly} required />
         </div>
       </div>
 
@@ -274,7 +283,7 @@ export function QuotationForm({
               const lockedUom = (lp?.extra?.uom_id as string) || "";
               const lockedUomCode = lockedUom ? uomCodeById.get(lockedUom) ?? "" : "";
               return (
-                <tr key={l.key} className="border-t">
+                <tr key={l.key} className="border-t align-top">
                   <td className="p-1.5">
                     <div className="flex gap-1">
                       <select
@@ -306,7 +315,7 @@ export function QuotationForm({
                     )}
                   </td>
                   <td className="p-1.5">
-                    <Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly} className="h-9" />
+                    <Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly || !!l.product_id} className="h-9 disabled:opacity-70" />
                   </td>
                   <td className="p-1.5">
                     <Input type="number" step="0.01" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" />
@@ -327,14 +336,15 @@ export function QuotationForm({
                     </select>
                   </td>
                   <td className="p-1.5">
-                    <Input type="number" step="0.01" value={l.unit_price} onChange={(e) => updateLine(i, { unit_price: e.target.value })} disabled={isReadOnly} className="h-9 text-right" />
+                    <Input type="number" step="0.01" value={l.unit_price} onChange={(e) => updateLine(i, { unit_price: e.target.value })} disabled={isReadOnly || !!l.product_id} title={l.product_id ? "Price comes from the product" : undefined} className="h-9 text-right disabled:opacity-70" />
                   </td>
                   <td className="p-1.5">
                     <Input type="number" step="0.01" value={l.discount_pct} onChange={(e) => updateLine(i, { discount_pct: e.target.value })} disabled={isReadOnly} className="h-9 text-right" />
                   </td>
                   <td className="p-1.5">
-                    <select value={l.tax_id} onChange={(e) => updateLine(i, { tax_id: e.target.value })} disabled={isReadOnly}
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                    <select value={l.tax_id} onChange={(e) => updateLine(i, { tax_id: e.target.value })} disabled={isReadOnly || !!l.product_id}
+                      title={l.product_id ? "Tax comes from the product" : undefined}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:opacity-70">
                       <option value="">—</option>
                       {taxOptions}
                     </select>

@@ -195,7 +195,7 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
               const lockedUom = (lp?.extra?.uom_id as string) || "";
               const lockedUomCode = lockedUom ? uomCodeById.get(lockedUom) ?? "" : "";
               return (
-                <tr key={l.key} className="border-t">
+                <tr key={l.key} className="border-t align-top">
                   <td className="p-1.5">
                     <div className="flex gap-1">
                       <select

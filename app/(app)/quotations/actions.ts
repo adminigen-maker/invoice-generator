@@ -22,7 +22,7 @@ const lineSchema = z.object({
 const quotationSchema = z.object({
   customer_id: z.string().uuid("Customer required"),
   quote_date: z.string().min(1),
-  valid_until: z.string().optional().nullable(),
+  valid_until: z.string().min(1, "Valid until is required"),
   currency: z.string().default("AED"),
   notes: z.string().optional().nullable(),
   terms: z.string().optional().nullable(),
