@@ -24,7 +24,21 @@ type Vat = {
   invoices: { number: string; invoice_date: string; customer: string; taxable: number; vat: number; total: number }[];
 };
 
-function toCsv(r: Reports, vat: Vat | null, from?: string, to?: string): string {
+type Valuation = {
+  items: { sku: string; name: string; category: string; uom: string; on_hand: number; cost: number; value: number }[];
+  total_value: number;
+  total_lines: number;
+};
+
+type Profit = {
+  totals: { revenue: number; cost: number; profit: number };
+  by_product: { name: string; qty: number; revenue: number; cost: number; profit: number }[];
+  by_customer: { name: string; revenue: number; cost: number; profit: number }[];
+};
+
+const marginPct = (revenue: number, profit: number) => (Number(revenue) ? (Number(profit) / Number(revenue)) * 100 : 0);
+
+function toCsv(r: Reports, vat: Vat | null, profit: Profit | null, valuation: Valuation | null, from?: string, to?: string): string {
   const esc = (v: unknown) => {
     const s = String(v ?? "");
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -33,6 +47,20 @@ function toCsv(r: Reports, vat: Vat | null, from?: string, to?: string): string 
   lines.push(`Invoice UAE — Report`);
   lines.push(`Period,${from || "all time"},${to || "today"}`);
   lines.push("");
+  if (profit) {
+    lines.push("Profitability,Revenue (net),COGS,Gross profit");
+    lines.push(`Totals,${profit.totals.revenue},${profit.totals.cost},${profit.totals.profit}`);
+    lines.push("");
+    lines.push("Profit by product,Qty,Revenue,Cost,Profit");
+    profit.by_product.forEach((p) => lines.push(`${esc(p.name)},${p.qty},${p.revenue},${p.cost},${p.profit}`));
+    lines.push("");
+  }
+  if (valuation) {
+    lines.push("Stock valuation,On hand,Cost,Value");
+    valuation.items.forEach((v) => lines.push(`${esc(v.name)},${v.on_hand},${v.cost},${v.value}`));
+    lines.push(`Total stock value,,,${valuation.total_value}`);
+    lines.push("");
+  }
   if (vat) {
     const net = Number(vat.output.vat) - Number(vat.input.vat);
     lines.push("VAT summary,Taxable,VAT");
@@ -72,12 +100,23 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const { from, to } = await searchParams;
 
   const supabase = await createClient();
+  const showCost = await can(P.inventory.productViewCost);
   const [{ data }, { data: vatData }] = await Promise.all([
     supabase.rpc("reports_summary", { from_date: from ?? null, to_date: to ?? null }),
     supabase.rpc("vat_report", { from_date: from ?? null, to_date: to ?? null }),
   ]);
   const r = (data as Reports | null) ?? null;
   const vat = (vatData as Vat | null) ?? null;
+
+  // Cost/profit is sensitive — only fetched for roles allowed to see cost price.
+  const [{ data: profitData }, { data: valData }] = showCost
+    ? await Promise.all([
+        supabase.rpc("profit_report", { from_date: from ?? null, to_date: to ?? null }),
+        supabase.rpc("stock_valuation"),
+      ])
+    : [{ data: null }, { data: null }];
+  const profit = (profitData as Profit | null) ?? null;
+  const valuation = (valData as Valuation | null) ?? null;
 
   if (!r) {
     return (
@@ -106,7 +145,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <p className="text-sm text-muted-foreground">Sales, receivables and product performance. Filter by date and export.</p>
       </div>
 
-      <ReportsToolbar csv={toCsv(r, vat, from, to)} filename={`report-${from || "all"}-${to || "today"}.csv`} />
+      <ReportsToolbar csv={toCsv(r, vat, profit, valuation, from, to)} filename={`report-${from || "all"}-${to || "today"}.csv`} />
 
       {/* Headline numbers */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -310,6 +349,104 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </CardContent>
         </Card>
       )}
+
+      {/* Profitability (only for roles that can see cost) */}
+      {profit && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Profitability</CardTitle></CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Tile label="Revenue (net)" value={formatMoney(profit.totals.revenue)} />
+              <Tile label="Cost (COGS)" value={formatMoney(profit.totals.cost)} />
+              <Tile label="Gross profit" value={formatMoney(profit.totals.profit)} tone={Number(profit.totals.profit) >= 0 ? "success" : "danger"} />
+              <Tile label="Margin" value={`${marginPct(profit.totals.revenue, profit.totals.profit).toFixed(1)}%`} tone={Number(profit.totals.profit) >= 0 ? "success" : "danger"} />
+            </div>
+            <p className="text-xs text-muted-foreground">Profit uses each product&apos;s current cost price (standard cost). Service / no-product lines carry no cost.</p>
+            <div className="grid lg:grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm font-medium mb-2">By product</div>
+                <Table>
+                  <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Profit</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {profit.by_product.length === 0 && (<TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>)}
+                    {profit.by_product.map((p, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell className="text-right font-mono">{formatMoney(p.revenue)}</TableCell>
+                        <TableCell className={`text-right font-mono ${Number(p.profit) < 0 ? "text-destructive" : ""}`}>{formatMoney(p.profit)}</TableCell>
+                        <TableCell className="text-right font-mono">{marginPct(p.revenue, p.profit).toFixed(1)}%</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div>
+                <div className="text-sm font-medium mb-2">By customer</div>
+                <Table>
+                  <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Profit</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {profit.by_customer.length === 0 && (<TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>)}
+                    {profit.by_customer.map((c, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{c.name}</TableCell>
+                        <TableCell className="text-right font-mono">{formatMoney(c.revenue)}</TableCell>
+                        <TableCell className={`text-right font-mono ${Number(c.profit) < 0 ? "text-destructive" : ""}`}>{formatMoney(c.profit)}</TableCell>
+                        <TableCell className="text-right font-mono">{marginPct(c.revenue, c.profit).toFixed(1)}%</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stock valuation (only for roles that can see cost) */}
+      {valuation && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Stock valuation</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 max-w-md">
+              <Tile label="Total stock value" value={formatMoney(valuation.total_value)} tone={Number(valuation.total_value) < 0 ? "danger" : undefined} />
+              <Tile label="Products in stock" value={String(valuation.total_lines)} />
+            </div>
+            <div className="max-h-96 overflow-y-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>SKU</TableHead><TableHead>Product</TableHead><TableHead>Category</TableHead>
+                    <TableHead className="text-right">On hand</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Value</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {valuation.items.length === 0 && (<TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No stock on hand.</TableCell></TableRow>)}
+                  {valuation.items.map((v, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-xs">{v.sku}</TableCell>
+                      <TableCell className="font-medium">{v.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{v.category}</TableCell>
+                      <TableCell className={`text-right font-mono ${Number(v.on_hand) < 0 ? "text-destructive" : ""}`}>{Number(v.on_hand).toFixed(2)} {v.uom}</TableCell>
+                      <TableCell className="text-right font-mono">{formatMoney(v.cost)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatMoney(v.value)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function Tile({ label, value, tone }: { label: string; value: string; tone?: "success" | "danger" }) {
+  const color = tone === "success" ? "text-emerald-600" : tone === "danger" ? "text-destructive" : "";
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tracking-tight font-mono ${color}`}>{value}</div>
     </div>
   );
 }
