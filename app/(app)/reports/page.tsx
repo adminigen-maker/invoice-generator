@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PieChart, Clock, Boxes, FileText, TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/db/supabase-server";
 import { can } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
@@ -7,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportsToolbar } from "@/components/reports-toolbar";
 import { RevenueBarChart, AgingDonut, RankBarChart, VatPie } from "@/components/charts/report-charts";
+import { ReportTabs, type ReportTab } from "@/components/charts/report-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +138,233 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   ];
   const netVat = vat ? Number(vat.output.vat) - Number(vat.input.vat) : 0;
 
+  // ---- Tab panels -------------------------------------------------------
+  const salesOverview = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Invoiced (total)" value={formatMoney(r.totals.revenue)} />
+        <Stat label="Collected" value={formatMoney(r.totals.collected)} tone="success" />
+        <Stat label="Outstanding" value={formatMoney(r.totals.outstanding)} tone={r.totals.outstanding > 0 ? "danger" : undefined} />
+        <Stat label="Invoices" value={String(r.totals.invoice_count)} />
+      </div>
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Revenue — last 12 months</CardTitle></CardHeader>
+        <CardContent><RevenueBarChart data={r.revenue_by_month} currency="AED" /></CardContent>
+      </Card>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Top products by revenue</CardTitle></CardHeader>
+          <CardContent><RankBarChart data={r.top_products.map((p) => ({ name: p.name, value: Number(p.revenue) }))} currency="AED" color="#0ea5e9" /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Top customers by revenue</CardTitle></CardHeader>
+          <CardContent><RankBarChart data={r.top_customers.map((c) => ({ name: c.name, value: Number(c.revenue) }))} currency="AED" color="#6366f1" /></CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
+  const agingReceivables = (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-base">Accounts receivable aging</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Tile label="Not yet due" value={formatMoney(aging[0].value)} tone="success" />
+          <Tile label="1–30 days" value={formatMoney(aging[1].value)} />
+          <Tile label="31–60 days" value={formatMoney(aging[2].value)} />
+          <Tile label="60+ days" value={formatMoney(aging[3].value)} tone={aging[3].value > 0 ? "danger" : undefined} />
+        </div>
+        <AgingDonut data={aging} />
+      </CardContent>
+    </Card>
+  );
+
+  const taxReport = vat ? (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-base">VAT summary (UAE)</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-lg border p-4">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Output VAT · sales</div>
+            <div className="mt-1 text-2xl font-semibold font-mono">{formatMoney(vat.output.vat)}</div>
+            <div className="text-xs text-muted-foreground mt-1">Taxable {formatMoney(vat.output.taxable)} · {vat.output.count} inv.</div>
+          </div>
+          <div className="rounded-lg border p-4">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Input VAT · purchases</div>
+            <div className="mt-1 text-2xl font-semibold font-mono">{formatMoney(vat.input.vat)}</div>
+            <div className="text-xs text-muted-foreground mt-1">Taxable {formatMoney(vat.input.taxable)} · {vat.input.count} PO</div>
+          </div>
+          <div className="rounded-lg border p-4 bg-muted/30">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Net VAT payable</div>
+            <div className={`mt-1 text-2xl font-semibold font-mono ${netVat > 0 ? "text-destructive" : "text-emerald-600"}`}>{formatMoney(netVat)}</div>
+            <div className="text-xs text-muted-foreground mt-1">Output − Input</div>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-4 items-start">
+          <div>
+            <div className="text-sm font-medium mb-2">Output VAT by rate</div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Rate</TableHead>
+                  <TableHead className="text-right">Rate %</TableHead>
+                  <TableHead className="text-right">Taxable</TableHead>
+                  <TableHead className="text-right">VAT</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {vat.by_rate.length === 0 && (
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>
+                )}
+                {vat.by_rate.map((b, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-mono text-xs">{b.code}</TableCell>
+                    <TableCell className="text-right font-mono">{Number(b.rate).toFixed(2)}%</TableCell>
+                    <TableCell className="text-right font-mono">{formatMoney(b.taxable)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatMoney(b.vat)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div>
+            <div className="text-sm font-medium mb-2">Sales by tax rate</div>
+            <VatPie data={vat.by_rate} />
+          </div>
+        </div>
+
+        {vat.invoices.length > 0 && (
+          <details>
+            <summary className="cursor-pointer text-sm font-medium select-none">
+              Invoice detail ({vat.invoices.length}) <span className="text-muted-foreground font-normal">— click to expand</span>
+            </summary>
+            <div className="mt-2 max-h-96 overflow-y-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Taxable</TableHead>
+                    <TableHead className="text-right">VAT</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {vat.invoices.map((iv, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-xs">{iv.number}</TableCell>
+                      <TableCell>{iv.customer}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(iv.invoice_date)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatMoney(iv.taxable)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatMoney(iv.vat)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </details>
+        )}
+      </CardContent>
+    </Card>
+  ) : (
+    <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No VAT data for this period.</CardContent></Card>
+  );
+
+  const stockValuation = valuation ? (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-base">Stock valuation</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 max-w-md">
+          <Tile label="Total stock value" value={formatMoney(valuation.total_value)} tone={Number(valuation.total_value) < 0 ? "danger" : undefined} />
+          <Tile label="Products in stock" value={String(valuation.total_lines)} />
+        </div>
+        <div className="max-h-[28rem] overflow-y-auto rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead><TableHead>Product</TableHead><TableHead>Category</TableHead>
+                <TableHead className="text-right">On hand</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Value</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {valuation.items.length === 0 && (<TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No stock on hand.</TableCell></TableRow>)}
+              {valuation.items.map((v, i) => (
+                <TableRow key={i}>
+                  <TableCell className="font-mono text-xs">{v.sku}</TableCell>
+                  <TableCell className="font-medium">{v.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{v.category}</TableCell>
+                  <TableCell className={`text-right font-mono ${Number(v.on_hand) < 0 ? "text-destructive" : ""}`}>{Number(v.on_hand).toFixed(2)} {v.uom}</TableCell>
+                  <TableCell className="text-right font-mono">{formatMoney(v.cost)}</TableCell>
+                  <TableCell className="text-right font-mono">{formatMoney(v.value)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  ) : null;
+
+  const profitability = profit ? (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-base">Profitability</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Tile label="Revenue (net)" value={formatMoney(profit.totals.revenue)} />
+          <Tile label="Cost (COGS)" value={formatMoney(profit.totals.cost)} />
+          <Tile label="Gross profit" value={formatMoney(profit.totals.profit)} tone={Number(profit.totals.profit) >= 0 ? "success" : "danger"} />
+          <Tile label="Margin" value={`${marginPct(profit.totals.revenue, profit.totals.profit).toFixed(1)}%`} tone={Number(profit.totals.profit) >= 0 ? "success" : "danger"} />
+        </div>
+        <p className="text-xs text-muted-foreground">Profit uses each product&apos;s current cost price (standard cost). Service / no-product lines carry no cost.</p>
+        <div className="grid lg:grid-cols-2 gap-4">
+          <div>
+            <div className="text-sm font-medium mb-2">By product</div>
+            <Table>
+              <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Profit</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {profit.by_product.length === 0 && (<TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>)}
+                {profit.by_product.map((p, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell className="text-right font-mono">{formatMoney(p.revenue)}</TableCell>
+                    <TableCell className={`text-right font-mono ${Number(p.profit) < 0 ? "text-destructive" : ""}`}>{formatMoney(p.profit)}</TableCell>
+                    <TableCell className="text-right font-mono">{marginPct(p.revenue, p.profit).toFixed(1)}%</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div>
+            <div className="text-sm font-medium mb-2">By customer</div>
+            <Table>
+              <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Profit</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {profit.by_customer.length === 0 && (<TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>)}
+                {profit.by_customer.map((c, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="text-right font-mono">{formatMoney(c.revenue)}</TableCell>
+                    <TableCell className={`text-right font-mono ${Number(c.profit) < 0 ? "text-destructive" : ""}`}>{formatMoney(c.profit)}</TableCell>
+                    <TableCell className="text-right font-mono">{marginPct(c.revenue, c.profit).toFixed(1)}%</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  ) : null;
+
+  const tabs: ReportTab[] = [
+    { key: "sales", label: "Sales Overview", icon: <PieChart className="h-4 w-4" />, content: salesOverview },
+    { key: "aging", label: "Aging Receivables", icon: <Clock className="h-4 w-4" />, content: agingReceivables },
+  ];
+  if (stockValuation) tabs.push({ key: "valuation", label: "Stock Valuation", icon: <Boxes className="h-4 w-4" />, content: stockValuation });
+  tabs.push({ key: "tax", label: "Tax Report", icon: <FileText className="h-4 w-4" />, content: taxReport });
+  if (profitability) tabs.push({ key: "profit", label: "Profitability", icon: <TrendingUp className="h-4 w-4" />, content: profitability });
+
   return (
     <div className="space-y-4 max-w-6xl">
       <div>
@@ -145,234 +374,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
       <ReportsToolbar csv={toCsv(r, vat, profit, valuation, from, to)} filename={`report-${from || "all"}-${to || "today"}.csv`} />
 
-      {/* Headline numbers */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat label="Invoiced (total)" value={formatMoney(r.totals.revenue)} />
-        <Stat label="Collected" value={formatMoney(r.totals.collected)} tone="success" />
-        <Stat label="Outstanding" value={formatMoney(r.totals.outstanding)} tone={r.totals.outstanding > 0 ? "danger" : undefined} />
-        <Stat label="Invoices" value={String(r.totals.invoice_count)} />
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4">
-        {/* AR aging */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Accounts receivable aging</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AgingDonut data={aging} />
-          </CardContent>
-        </Card>
-
-        {/* Revenue by month */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Revenue — last 12 months</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RevenueBarChart data={r.revenue_by_month} currency="AED" />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4">
-        {/* Top products */}
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Top products by revenue</CardTitle></CardHeader>
-          <CardContent>
-            <RankBarChart data={r.top_products.map((p) => ({ name: p.name, value: Number(p.revenue) }))} currency="AED" color="#0ea5e9" />
-          </CardContent>
-        </Card>
-
-        {/* Top customers */}
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Top customers by revenue</CardTitle></CardHeader>
-          <CardContent>
-            <RankBarChart data={r.top_customers.map((c) => ({ name: c.name, value: Number(c.revenue) }))} currency="AED" color="#6366f1" />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* VAT summary (UAE) */}
-      {vat && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">VAT summary (UAE)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-lg border p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Output VAT · sales</div>
-                <div className="mt-1 text-2xl font-semibold font-mono">{formatMoney(vat.output.vat)}</div>
-                <div className="text-xs text-muted-foreground mt-1">Taxable {formatMoney(vat.output.taxable)} · {vat.output.count} inv.</div>
-              </div>
-              <div className="rounded-lg border p-4">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Input VAT · purchases</div>
-                <div className="mt-1 text-2xl font-semibold font-mono">{formatMoney(vat.input.vat)}</div>
-                <div className="text-xs text-muted-foreground mt-1">Taxable {formatMoney(vat.input.taxable)} · {vat.input.count} PO</div>
-              </div>
-              <div className="rounded-lg border p-4 bg-muted/30">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Net VAT payable</div>
-                <div className={`mt-1 text-2xl font-semibold font-mono ${netVat > 0 ? "text-destructive" : "text-emerald-600"}`}>{formatMoney(netVat)}</div>
-                <div className="text-xs text-muted-foreground mt-1">Output − Input</div>
-              </div>
-            </div>
-
-            <div className="grid lg:grid-cols-2 gap-4 items-start">
-              <div>
-                <div className="text-sm font-medium mb-2">Output VAT by rate</div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Rate</TableHead>
-                      <TableHead className="text-right">Rate %</TableHead>
-                      <TableHead className="text-right">Taxable</TableHead>
-                      <TableHead className="text-right">VAT</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {vat.by_rate.length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>
-                    )}
-                    {vat.by_rate.map((b, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-mono text-xs">{b.code}</TableCell>
-                        <TableCell className="text-right font-mono">{Number(b.rate).toFixed(2)}%</TableCell>
-                        <TableCell className="text-right font-mono">{formatMoney(b.taxable)}</TableCell>
-                        <TableCell className="text-right font-mono">{formatMoney(b.vat)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div>
-                <div className="text-sm font-medium mb-2">Sales by tax rate</div>
-                <VatPie data={vat.by_rate} />
-              </div>
-            </div>
-
-            {vat.invoices.length > 0 && (
-              <details>
-                <summary className="cursor-pointer text-sm font-medium select-none">
-                  Invoice detail ({vat.invoices.length}) <span className="text-muted-foreground font-normal">— click to expand</span>
-                </summary>
-                <div className="mt-2 max-h-96 overflow-y-auto rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Invoice</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Taxable</TableHead>
-                        <TableHead className="text-right">VAT</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {vat.invoices.map((iv, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="font-mono text-xs">{iv.number}</TableCell>
-                          <TableCell>{iv.customer}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(iv.invoice_date)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatMoney(iv.taxable)}</TableCell>
-                          <TableCell className="text-right font-mono">{formatMoney(iv.vat)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </details>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Profitability (only for roles that can see cost) */}
-      {profit && (
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Profitability</CardTitle></CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <Tile label="Revenue (net)" value={formatMoney(profit.totals.revenue)} />
-              <Tile label="Cost (COGS)" value={formatMoney(profit.totals.cost)} />
-              <Tile label="Gross profit" value={formatMoney(profit.totals.profit)} tone={Number(profit.totals.profit) >= 0 ? "success" : "danger"} />
-              <Tile label="Margin" value={`${marginPct(profit.totals.revenue, profit.totals.profit).toFixed(1)}%`} tone={Number(profit.totals.profit) >= 0 ? "success" : "danger"} />
-            </div>
-            <p className="text-xs text-muted-foreground">Profit uses each product&apos;s current cost price (standard cost). Service / no-product lines carry no cost.</p>
-            <div className="grid lg:grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm font-medium mb-2">By product</div>
-                <Table>
-                  <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Profit</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {profit.by_product.length === 0 && (<TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>)}
-                    {profit.by_product.map((p, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{p.name}</TableCell>
-                        <TableCell className="text-right font-mono">{formatMoney(p.revenue)}</TableCell>
-                        <TableCell className={`text-right font-mono ${Number(p.profit) < 0 ? "text-destructive" : ""}`}>{formatMoney(p.profit)}</TableCell>
-                        <TableCell className="text-right font-mono">{marginPct(p.revenue, p.profit).toFixed(1)}%</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div>
-                <div className="text-sm font-medium mb-2">By customer</div>
-                <Table>
-                  <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Profit</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {profit.by_customer.length === 0 && (<TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>)}
-                    {profit.by_customer.map((c, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell className="text-right font-mono">{formatMoney(c.revenue)}</TableCell>
-                        <TableCell className={`text-right font-mono ${Number(c.profit) < 0 ? "text-destructive" : ""}`}>{formatMoney(c.profit)}</TableCell>
-                        <TableCell className="text-right font-mono">{marginPct(c.revenue, c.profit).toFixed(1)}%</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stock valuation (only for roles that can see cost) */}
-      {valuation && (
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Stock valuation</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 max-w-md">
-              <Tile label="Total stock value" value={formatMoney(valuation.total_value)} tone={Number(valuation.total_value) < 0 ? "danger" : undefined} />
-              <Tile label="Products in stock" value={String(valuation.total_lines)} />
-            </div>
-            <div className="max-h-96 overflow-y-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>SKU</TableHead><TableHead>Product</TableHead><TableHead>Category</TableHead>
-                    <TableHead className="text-right">On hand</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Value</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {valuation.items.length === 0 && (<TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No stock on hand.</TableCell></TableRow>)}
-                  {valuation.items.map((v, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-mono text-xs">{v.sku}</TableCell>
-                      <TableCell className="font-medium">{v.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{v.category}</TableCell>
-                      <TableCell className={`text-right font-mono ${Number(v.on_hand) < 0 ? "text-destructive" : ""}`}>{Number(v.on_hand).toFixed(2)} {v.uom}</TableCell>
-                      <TableCell className="text-right font-mono">{formatMoney(v.cost)}</TableCell>
-                      <TableCell className="text-right font-mono">{formatMoney(v.value)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <ReportTabs tabs={tabs} />
     </div>
   );
 }
