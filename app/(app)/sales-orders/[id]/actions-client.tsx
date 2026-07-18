@@ -21,6 +21,7 @@ export function CreateFromSOButtons({
 
   return (
     <Button
+      type="button"
       onClick={() =>
         startTx(async () => {
           const res = await createDeliveryAndInvoiceFromSO(salesOrderId);

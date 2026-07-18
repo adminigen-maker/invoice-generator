@@ -97,6 +97,19 @@ export async function createDeliveryAndInvoiceFromSO(
     const { data: so } = await supabase.from("sales_order").select("*, lines:sales_order_line(*)").eq("id", salesOrderId).maybeSingle();
     if (!so) return { ok: false, error: "Sales order not found" };
 
+    // Idempotency guard: never create a second delivery note / invoice for the
+    // same order. Delivery notes are now created as DRAFT, so quantity_delivered
+    // doesn't roll up to block a re-run on its own — this explicit check does.
+    // It also stops a stray POST replay (browser back/forward, double-click, or
+    // a refresh re-submitting the action) from silently creating documents.
+    const [{ data: existingDn }, { data: existingInv }] = await Promise.all([
+      supabase.from("delivery_note").select("id").eq("sales_order_id", salesOrderId).limit(1),
+      supabase.from("invoice").select("id").eq("sales_order_id", salesOrderId).limit(1),
+    ]);
+    if ((existingDn?.length ?? 0) > 0 || (existingInv?.length ?? 0) > 0) {
+      return { ok: false, error: "A delivery note and invoice already exist for this order." };
+    }
+
     type SoLine = { id: string; product_id: string | null; uom_id: string | null; description: string; quantity_ordered: number; quantity_delivered: number; unit_price: number; discount_pct: number; tax_id: string | null };
     const outstanding = ((so.lines ?? []) as SoLine[])
       .map((l) => ({ l, qty: Number(l.quantity_ordered) - Number(l.quantity_delivered) }))
