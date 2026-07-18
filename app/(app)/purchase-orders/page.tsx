@@ -59,7 +59,7 @@ export default async function PurchaseOrdersPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Purchase Orders</h1>
           <p className="text-sm text-muted-foreground">Orders placed with your vendors</p>

@@ -38,7 +38,7 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-4 max-w-6xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-3">
             {quotation.number}

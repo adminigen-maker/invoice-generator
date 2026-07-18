@@ -56,7 +56,7 @@ export function QuickAddProduct({
   return (
     <Dialog open={open} onClose={onClose} title="New product" description="Add without leaving this form">
       <form onSubmit={submit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Name <span className="text-destructive">*</span></Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
@@ -76,7 +76,7 @@ export function QuickAddProduct({
           </div>
         </div>
         <p className="text-xs text-muted-foreground">SKU is generated automatically on save.</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Sale price</Label>
             <Input type="number" step="0.01" min="0" value={price} onChange={(e) => setPrice(e.target.value)} />

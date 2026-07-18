@@ -61,7 +61,7 @@ export function QuickAddCustomer({
           <Label>Name <span className="text-destructive">*</span></Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Email</Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -71,7 +71,7 @@ export function QuickAddCustomer({
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Payment terms (days)</Label>
             <Input type="number" min="0" value={terms} onChange={(e) => setTerms(e.target.value)} />
