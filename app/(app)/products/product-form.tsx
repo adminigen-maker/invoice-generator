@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { QuickAddCategory } from "@/components/quick-add/quick-add-category";
 import { createProduct, updateProduct } from "./actions";
 
@@ -42,6 +43,8 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState(categoriesInit);
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
+  const [uomId, setUomId] = useState(initial?.uom_id ?? "");
+  const [taxId, setTaxId] = useState(initial?.tax_id ?? "");
   const [catOpen, setCatOpen] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -80,17 +83,15 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
 
       <Field label="Category" span={2}>
         <div className="flex gap-2">
-          <select
-            name="category_id"
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            <option value="">(uncategorized)</option>
-            {categories.map((o) => (
-              <option key={o.id} value={o.id}>{o.label}</option>
-            ))}
-          </select>
+          <div className="flex-1">
+            <SearchableSelect
+              name="category_id"
+              value={categoryId}
+              onChange={setCategoryId}
+              options={categories.map((o) => ({ value: o.id, label: o.label }))}
+              placeholder="(uncategorized)"
+            />
+          </div>
           <Button type="button" variant="outline" size="icon" className="shrink-0" title="Add new category" onClick={() => setCatOpen(true)}>
             <Plus className="h-4 w-4" />
           </Button>
@@ -98,10 +99,23 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
       </Field>
 
       <Field label="Unit of measure" required>
-        <Select name="uom_id" defaultValue={initial?.uom_id ?? ""} options={uoms} required />
+        <SearchableSelect
+          name="uom_id"
+          value={uomId}
+          onChange={setUomId}
+          options={uoms.map((o) => ({ value: o.id, label: o.label }))}
+          placeholder="— select —"
+          required
+        />
       </Field>
       <Field label="Tax">
-        <Select name="tax_id" defaultValue={initial?.tax_id ?? ""} options={taxes} placeholder="(no tax)" />
+        <SearchableSelect
+          name="tax_id"
+          value={taxId}
+          onChange={setTaxId}
+          options={taxes.map((o) => ({ value: o.id, label: o.label }))}
+          placeholder="(no tax)"
+        />
       </Field>
 
       <Field label="Sale price">
@@ -161,20 +175,3 @@ function Field({
   );
 }
 
-function Select({
-  name, defaultValue, options, placeholder, required,
-}: { name: string; defaultValue?: string; options: Option[]; placeholder?: string; required?: boolean }) {
-  return (
-    <select
-      name={name}
-      defaultValue={defaultValue ?? ""}
-      required={required}
-      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-    >
-      <option value="">{placeholder ?? "— select —"}</option>
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>{o.label}</option>
-      ))}
-    </select>
-  );
-}

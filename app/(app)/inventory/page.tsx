@@ -7,6 +7,8 @@ import { formatMoney } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ListToolbar } from "@/components/list-toolbar";
+import { SelectFilter } from "@/components/select-filter";
 import { AdjustStockButton } from "./adjust-stock-button";
 
 export const dynamic = "force-dynamic";
@@ -21,18 +23,43 @@ type StockRow = {
   cost_price: number | null;
 };
 
-export default async function InventoryPage() {
+/** in-stock / low / out — derived from on-hand vs the product's reorder point. */
+function stockStatus(r: { on_hand: number; reorder_point: number | null }): "out" | "low" | "ok" {
+  if (r.on_hand <= 0) return "out";
+  if (r.reorder_point != null && r.on_hand <= Number(r.reorder_point)) return "low";
+  return "ok";
+}
+
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; uom?: string; status?: string }>;
+}) {
   if (!(await can(P.inventory.stockView))) redirect("/");
+  const { q, uom, status } = await searchParams;
 
   const supabase = await createClient();
   const canAdjust = await can(P.inventory.stockAdjust);
   const { data } = await supabase.rpc("stock_on_hand");
-  const rows = ((data as StockRow[] | null) ?? []).map((r) => ({ ...r, on_hand: Number(r.on_hand) }));
+  const all = ((data as StockRow[] | null) ?? []).map((r) => ({ ...r, on_hand: Number(r.on_hand) }));
 
-  const lowCount = rows.filter((r) => r.reorder_point != null && r.on_hand <= Number(r.reorder_point)).length;
-  const outCount = rows.filter((r) => r.on_hand <= 0).length;
-  const hasCost = rows.some((r) => r.cost_price != null);
-  const totalValue = rows.reduce((s, r) => s + (r.cost_price != null ? r.on_hand * Number(r.cost_price) : 0), 0);
+  // Stats reflect the whole catalogue; the table below reflects the filters.
+  const lowCount = all.filter((r) => stockStatus(r) === "low").length;
+  const outCount = all.filter((r) => r.on_hand <= 0).length;
+  const hasCost = all.some((r) => r.cost_price != null);
+  const totalValue = all.reduce((s, r) => s + (r.cost_price != null ? r.on_hand * Number(r.cost_price) : 0), 0);
+
+  const uomOptions = Array.from(new Set(all.map((r) => r.uom).filter(Boolean) as string[]))
+    .sort()
+    .map((u) => ({ value: u, label: u }));
+
+  const term = (q ?? "").trim().toLowerCase();
+  const rows = all.filter((r) => {
+    if (uom && r.uom !== uom) return false;
+    if (status && stockStatus(r) !== status) return false;
+    if (term && !`${r.sku} ${r.name}`.toLowerCase().includes(term)) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -49,6 +76,36 @@ export default async function InventoryPage() {
         <Stat icon={<PackageX className="h-4 w-4 text-destructive" />} label="Out of stock" value={outCount.toString()} />
         {hasCost && <Stat icon={<Boxes className="h-4 w-4 text-emerald-500" />} label="Stock value" value={formatMoney(totalValue)} />}
       </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <SelectFilter
+          param="uom"
+          label="Unit"
+          options={uomOptions}
+          allLabel="All units"
+          className="w-36"
+        />
+        <SelectFilter
+          param="status"
+          label="Stock status"
+          options={[
+            { value: "ok", label: "In stock" },
+            { value: "low", label: "At / below reorder" },
+            { value: "out", label: "Out of stock" },
+          ]}
+          allLabel="All statuses"
+          className="w-48"
+        />
+        <div className="ml-auto w-full sm:w-72">
+          <ListToolbar showViews={false} searchPlaceholder="Search SKU or product…" />
+        </div>
+      </div>
+
+      {rows.length !== all.length && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          Showing {rows.length} of {all.length} items. The cards above cover all stock.
+        </p>
+      )}
 
       <Card>
         <Table>
@@ -68,7 +125,7 @@ export default async function InventoryPage() {
             {rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={(hasCost ? 7 : 6) + (canAdjust ? 1 : 0)} className="text-center text-muted-foreground py-8">
-                  No stockable products yet.
+                  {all.length === 0 ? "No stockable products yet." : "No items match these filters."}
                 </TableCell>
               </TableRow>
             )}

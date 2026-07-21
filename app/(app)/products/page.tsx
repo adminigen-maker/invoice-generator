@@ -15,6 +15,7 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { RowActions } from "@/components/row-actions";
 import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
 import { SortHeader } from "@/components/sort-header";
+import { SelectFilter } from "@/components/select-filter";
 import { resolveSort } from "@/lib/list-sort";
 import { setProductActive, deleteProduct } from "./actions";
 import { ilikeTerm } from "@/lib/list-query";
@@ -26,12 +27,14 @@ const SORTABLE = ["sku", "name", "sale_price", "cost_price", "is_active", "creat
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; view?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{ q?: string; view?: string; sort?: string; dir?: string; category?: string }>;
 }) {
-  const { q, view = "active", sort, dir } = await searchParams;
+  const { q, view = "active", sort, dir, category } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
   const order = resolveSort(sort, dir, SORTABLE);
+
+  const { data: categories } = await supabase.from("product_category").select("id, name").order("name");
 
   let query = supabase
     .from("product")
@@ -41,6 +44,7 @@ export default async function ProductsPage({
 
   if (view === "active") query = query.eq("is_active", true);
   else if (view === "inactive") query = query.eq("is_active", false);
+  if (category) query = query.eq("category_id", category);
 
   const term = ilikeTerm(q);
   if (term) query = query.or(`sku.ilike.${term},name.ilike.${term}`);
@@ -78,7 +82,18 @@ export default async function ProductsPage({
         )}
       </div>
 
-      <ListToolbar searchPlaceholder="Search SKU or name…" />
+      <div className="flex flex-wrap items-end gap-2">
+        <SelectFilter
+          param="category"
+          label="Category"
+          options={(categories ?? []).map((c) => ({ value: c.id, label: c.name }))}
+          allLabel="All categories"
+          className="w-52"
+        />
+        <div className="ml-auto w-full sm:w-auto sm:min-w-[420px]">
+          <ListToolbar searchPlaceholder="Search SKU or name…" />
+        </div>
+      </div>
 
       <SelectionProvider>
       <BulkBar entity="product" entityLabel="product" csvRows={csvRows} filename="products" canDelete={canDelete} />
