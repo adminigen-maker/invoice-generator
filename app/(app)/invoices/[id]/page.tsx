@@ -187,6 +187,13 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               <RecordPaymentForm invoiceId={inv.id} balance={balance} currency={inv.currency} />
             </div>
           )}
+
+          {!posted && (
+            <div className="mt-4 border-t pt-4 text-sm text-muted-foreground">
+              This invoice is still a <span className="font-medium text-foreground">draft</span> — payments can&apos;t be recorded yet.
+              Use <span className="font-medium text-foreground">Post invoice</span> at the top to finalise it, then the payment form appears here.
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

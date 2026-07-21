@@ -40,6 +40,12 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             {vendorName} · Ordered {formatDate(po.order_date)}
             {po.received_at && <> · Received {formatDate(po.received_at)}</>}
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {po.status === "draft" && "Draft — edit freely, then Confirm to place the order."}
+            {po.status === "confirmed" && "Confirmed — still editable. Click Receive when the goods arrive; that adds them to stock."}
+            {po.status === "received" && "Received — stock has been added. This order is now locked."}
+            {po.status === "cancelled" && "Cancelled."}
+          </p>
         </div>
         <PoActions
           id={po.id}

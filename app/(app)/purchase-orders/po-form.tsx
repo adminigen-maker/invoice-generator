@@ -71,7 +71,9 @@ export function PurchaseOrderForm({
   const productOptions = useMemo(() => products.map((p) => <option key={p.id} value={p.id}>{p.label}</option>), [products]);
   const uomOptions = useMemo(() => uoms.map((u) => <option key={u.id} value={u.id}>{u.label}</option>), [uoms]);
 
-  const isReadOnly = !!(initial?.status && initial.status !== "draft");
+  // Editable until the goods are actually received (or it's cancelled/closed) —
+  // a confirmed-but-not-yet-received PO can still be corrected.
+  const isReadOnly = !!(initial?.status && ["received", "cancelled", "closed"].includes(initial.status));
 
   function updateLine(i: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
