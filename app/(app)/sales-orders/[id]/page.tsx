@@ -122,9 +122,9 @@ export default async function SalesOrderPage({ params }: { params: Promise<{ id:
                     <div className="font-medium">{l.product?.name ?? l.description}</div>
                     {l.product?.sku && <div className="text-xs text-muted-foreground font-mono">{l.product.sku}</div>}
                   </TableCell>
-                  <TableCell className="text-right font-mono">{Number(l.quantity_ordered).toFixed(2)} {l.uom?.code}</TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground">{Number(l.quantity_delivered).toFixed(2)}</TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground">{Number(l.quantity_invoiced).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono">{Number(l.quantity_ordered).toFixed(0)} {l.uom?.code}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">{Number(l.quantity_delivered).toFixed(0)}</TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">{Number(l.quantity_invoiced).toFixed(0)}</TableCell>
                   <TableCell className="text-right font-mono">{formatMoney(l.unit_price, so.currency)}</TableCell>
                   <TableCell className="text-right font-mono">{formatMoney(l.line_total, so.currency)}</TableCell>
                 </TableRow>

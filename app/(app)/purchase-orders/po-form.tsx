@@ -185,7 +185,7 @@ export function PurchaseOrderForm({
                     </div>
                   </td>
                   <td className="p-1.5"><Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly} className="h-9" /></td>
-                  <td className="p-1.5"><Input type="number" step="0.01" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
+                  <td className="p-1.5"><Input type="number" step="1" min="0" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
                   <td className="p-1.5">
                     <div className="flex gap-1">
                       <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })} disabled={isReadOnly}

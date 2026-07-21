@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/db/supabase-server";
 import { getPermissions } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
@@ -112,7 +113,9 @@ export default async function PaymentsPage({
             {(rows ?? []).map((r) => (
               <TableRow key={r.id}>
                 <RowCheck id={r.id} />
-                <TableCell className="font-mono text-xs">{r.number}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  <Link href={`/payments/${r.id}`} className="text-blue-600 hover:text-blue-700">{r.number}</Link>
+                </TableCell>
                 <TableCell className="font-medium">{(r.customer as { name?: string } | null)?.name ?? "—"}</TableCell>
                 <TableCell>{formatDate(r.payment_date)}</TableCell>
                 <TableCell className="capitalize">{r.method?.replace("_", " ")}</TableCell>

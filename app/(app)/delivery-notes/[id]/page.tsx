@@ -91,7 +91,7 @@ export default async function DeliveryNotePage({ params }: { params: Promise<{ i
                   <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-mono text-xs">{l.product?.sku ?? "—"}</TableCell>
                   <TableCell className="font-medium">{l.product?.name ?? "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{Number(l.quantity).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono">{Number(l.quantity).toFixed(0)}</TableCell>
                   <TableCell>{l.uom?.code ?? "—"}</TableCell>
                 </TableRow>
               ))}

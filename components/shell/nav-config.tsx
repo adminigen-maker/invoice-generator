@@ -23,6 +23,7 @@ import {
   BarChart3,
   ShoppingCart,
   History,
+  Undo2,
   Check,
   ChevronsUpDown,
 } from "lucide-react";
@@ -53,6 +54,7 @@ const NAV: NavItem[] = [
   { area: "operations", section: "Purchasing", label: "Purchase Orders", href: "/purchase-orders", icon: ShoppingCart, color: "text-pink-500", perm: P.procurement.poView },
   { area: "operations", section: "Finance", label: "Invoices", href: "/invoices", icon: Receipt, color: "text-emerald-500", perm: P.invoice.view },
   { area: "operations", section: "Finance", label: "Payments", href: "/payments", icon: CircleDollarSign, color: "text-green-600", perm: P.invoice.paymentView },
+  { area: "operations", section: "Finance", label: "Returns / Credits", href: "/credit-notes", icon: Undo2, color: "text-rose-500", perm: P.invoice.creditNoteView },
 
   { area: "master", section: "Catalog", label: "Products", href: "/products", icon: Package, color: "text-orange-500", perm: P.inventory.productView },
   { area: "master", section: "Catalog", label: "Inventory", href: "/inventory", icon: Boxes, color: "text-lime-600", perm: P.inventory.stockView },

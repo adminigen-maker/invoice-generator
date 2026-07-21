@@ -296,7 +296,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   <TableCell className="font-mono text-xs">{v.sku}</TableCell>
                   <TableCell className="font-medium">{v.name}</TableCell>
                   <TableCell className="text-muted-foreground">{v.category}</TableCell>
-                  <TableCell className={`text-right font-mono ${Number(v.on_hand) < 0 ? "text-destructive" : ""}`}>{Number(v.on_hand).toFixed(2)} {v.uom}</TableCell>
+                  <TableCell className={`text-right font-mono ${Number(v.on_hand) < 0 ? "text-destructive" : ""}`}>{Number(v.on_hand).toFixed(0)} {v.uom}</TableCell>
                   <TableCell className="text-right font-mono">{formatMoney(v.cost)}</TableCell>
                   <TableCell className="text-right font-mono">{formatMoney(v.value)}</TableCell>
                 </TableRow>

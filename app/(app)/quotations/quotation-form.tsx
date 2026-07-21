@@ -349,8 +349,8 @@ export function QuotationForm({
                       const over = Number(l.quantity) > stock;
                       return (
                         <div className={`text-[11px] mt-1 ${over || stock <= 0 ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-                          In stock: {stock.toFixed(2)}{lockedUomCode ? ` ${lockedUomCode}` : ""}
-                          {over && ` — only ${stock.toFixed(2)} available`}
+                          In stock: {stock.toFixed(0)}{lockedUomCode ? ` ${lockedUomCode}` : ""}
+                          {over && ` — only ${stock.toFixed(0)} available`}
                         </div>
                       );
                     })()}
@@ -365,7 +365,7 @@ export function QuotationForm({
                     <Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly || !!l.product_id} className="h-9 disabled:opacity-70" />
                   </td>
                   <td className="p-1.5">
-                    <Input type="number" step="0.01" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" />
+                    <Input type="number" step="1" min="0" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" />
                   </td>
                   <td className="p-1.5">
                     <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })}

@@ -88,7 +88,7 @@ export function ReturnCreditButton({
                   </div>
                   <Input
                     type="number"
-                    step="0.01"
+                    step="1"
                     min="0"
                     max={rem}
                     value={qty[l.id] ?? ""}

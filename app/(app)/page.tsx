@@ -124,7 +124,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                       <div className="text-muted-foreground font-mono text-xs">{s.sku}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className={`font-mono ${Number(s.on_hand) <= 0 ? "text-destructive" : "text-amber-600"}`}>{Number(s.on_hand).toFixed(2)}</div>
+                      <div className={`font-mono ${Number(s.on_hand) <= 0 ? "text-destructive" : "text-amber-600"}`}>{Number(s.on_hand).toFixed(0)}</div>
                       <div className="text-xs text-muted-foreground">reorder at {Number(s.reorder_point).toFixed(0)}</div>
                     </div>
                   </li>

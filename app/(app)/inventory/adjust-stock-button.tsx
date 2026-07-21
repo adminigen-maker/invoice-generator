@@ -24,7 +24,7 @@ export function AdjustStockButton({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [qty, setQty] = useState(currentQty.toFixed(2));
+  const [qty, setQty] = useState(currentQty.toFixed(0));
   const [reason, setReason] = useState("");
 
   async function submit(e: React.FormEvent) {
@@ -44,7 +44,7 @@ export function AdjustStockButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" className="h-8" onClick={() => { setQty(currentQty.toFixed(2)); setOpen(true); }}>
+      <Button variant="outline" size="sm" className="h-8" onClick={() => { setQty(currentQty.toFixed(0)); setOpen(true); }}>
         <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />Adjust
       </Button>
       <Dialog
@@ -55,11 +55,11 @@ export function AdjustStockButton({
       >
         <form onSubmit={submit} className="space-y-3">
           <div className="text-sm text-muted-foreground">
-            Current on hand: <span className="font-mono font-medium text-foreground">{currentQty.toFixed(2)} {uom ?? ""}</span>
+            Current on hand: <span className="font-mono font-medium text-foreground">{currentQty.toFixed(0)} {uom ?? ""}</span>
           </div>
           <div className="space-y-1.5">
             <Label>New quantity on hand {uom ? `(${uom})` : ""}</Label>
-            <Input type="number" step="0.01" min="0" value={qty} onChange={(e) => setQty(e.target.value)} required autoFocus />
+            <Input type="number" step="1" min="0" value={qty} onChange={(e) => setQty(e.target.value)} required autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label>Reason</Label>
