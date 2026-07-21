@@ -16,7 +16,7 @@ import { cancelInvoice, deleteInvoice } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-const INACTIVE = "(cancelled,closed)";
+const INACTIVE = "(cancelled,closed,returned)";
 
 export default async function InvoicesPage({
   searchParams,
@@ -34,7 +34,7 @@ export default async function InvoicesPage({
     .limit(200);
 
   if (view === "active") query = query.not("status", "in", INACTIVE);
-  else if (view === "inactive") query = query.in("status", ["cancelled", "closed"]);
+  else if (view === "inactive") query = query.in("status", ["cancelled", "closed", "returned"]);
 
   const term = ilikeTerm(q);
   if (term) query = query.or(`number.ilike.${term}`);
