@@ -98,15 +98,17 @@ function toCsv(r: Reports, vat: Vat | null, profit: Profit | null, valuation: Va
   return lines.join("\n");
 }
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; customer?: string }> }) {
   if (!(await can(P.invoice.view))) redirect("/");
-  const { from, to } = await searchParams;
+  const { from, to, customer } = await searchParams;
+  const customerId = customer || null;
 
   const supabase = await createClient();
   const showCost = await can(P.inventory.productViewCost);
-  const [{ data }, { data: vatData }] = await Promise.all([
-    supabase.rpc("reports_summary", { from_date: from ?? null, to_date: to ?? null }),
-    supabase.rpc("vat_report", { from_date: from ?? null, to_date: to ?? null }),
+  const [{ data }, { data: vatData }, { data: customerList }] = await Promise.all([
+    supabase.rpc("reports_summary", { from_date: from ?? null, to_date: to ?? null, p_customer: customerId }),
+    supabase.rpc("vat_report", { from_date: from ?? null, to_date: to ?? null, p_customer: customerId }),
+    supabase.from("customer").select("id, code, name").eq("is_active", true).order("name"),
   ]);
   const r = (data as Reports | null) ?? null;
   const vat = (vatData as Vat | null) ?? null;
@@ -114,7 +116,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   // Cost/profit is sensitive — only fetched for roles allowed to see cost price.
   const [{ data: profitData }, { data: valData }] = showCost
     ? await Promise.all([
-        supabase.rpc("profit_report", { from_date: from ?? null, to_date: to ?? null }),
+        supabase.rpc("profit_report", { from_date: from ?? null, to_date: to ?? null, p_customer: customerId }),
         supabase.rpc("stock_valuation"),
       ])
     : [{ data: null }, { data: null }];
@@ -372,7 +374,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <p className="text-sm text-muted-foreground">Sales, receivables and product performance. Filter by date and export.</p>
       </div>
 
-      <ReportsToolbar csv={toCsv(r, vat, profit, valuation, from, to)} filename={`report-${from || "all"}-${to || "today"}.csv`} />
+      <ReportsToolbar
+        csv={toCsv(r, vat, profit, valuation, from, to)}
+        filename={`report-${from || "all"}-${to || "today"}.csv`}
+        customers={(customerList ?? []).map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))}
+      />
+      {customerId && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          Filtered to one customer. Stock valuation covers all stock, and input VAT (purchases) isn&apos;t
+          customer-specific, so it shows as zero while this filter is on.
+        </p>
+      )}
 
       <ReportTabs tabs={tabs} />
     </div>

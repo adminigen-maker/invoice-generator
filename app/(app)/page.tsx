@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { createClient } from "@/lib/db/supabase-server";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { RevenueTrendChart, StatusDonutChart, TopCustomersChart } from "@/components/charts/dashboard-charts";
+import { CustomerFilter } from "@/components/customer-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -25,13 +26,16 @@ type Ops = {
   low_stock_list: { sku: string; name: string; reorder_point: number; on_hand: number }[];
 };
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ customer?: string }> }) {
+  const { customer } = await searchParams;
+  const customerId = customer || null;
   const supabase = await createClient();
-  const [{ data: opsData }, { data: trend }, { data: statuses }, { data: topCustomers }] = await Promise.all([
-    supabase.rpc("dashboard_operational"),
+  const [{ data: opsData }, { data: trend }, { data: statuses }, { data: topCustomers }, { data: customerList }] = await Promise.all([
+    supabase.rpc("dashboard_operational", { p_customer: customerId }),
     supabase.rpc("revenue_by_month", { months: 6 }),
     supabase.rpc("invoice_status_counts"),
     supabase.rpc("top_customers", { lim: 5 }),
+    supabase.from("customer").select("id, code, name").eq("is_active", true).order("name"),
   ]);
   const ops = (opsData as Ops | null) ?? null;
 
@@ -43,9 +47,15 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">What needs your attention today</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            What needs your attention today
+            {customerId && " · filtered to one customer (open POs and low stock stay company-wide)"}
+          </p>
+        </div>
+        <CustomerFilter customers={(customerList ?? []).map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))} />
       </div>
 
       {/* Actionable KPIs */}
