@@ -152,11 +152,25 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                     )}
                     {l.product?.sku && <div className="text-xs text-muted-foreground font-mono">{l.product.sku}</div>}
                   </TableCell>
-                  <TableCell className="text-right font-mono">{Number(l.quantity).toFixed(2)} {l.uom?.code}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {(Number(l.quantity) - (creditedByLine.get(l.id) ?? 0)).toFixed(2)} {l.uom?.code}
+                    {(creditedByLine.get(l.id) ?? 0) > 0 && (
+                      <div className="text-[11px] text-amber-600 font-sans">
+                        {(creditedByLine.get(l.id) ?? 0).toFixed(2)} returned
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-mono">{formatMoney(l.unit_price, inv.currency)}</TableCell>
                   <TableCell className="text-right font-mono">{Number(l.discount_pct).toFixed(2)}%</TableCell>
                   <TableCell>{l.tax?.code ?? "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{formatMoney(l.line_total, inv.currency)}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {formatMoney(
+                      Number(l.quantity) > 0
+                        ? Number(l.line_total) * ((Number(l.quantity) - (creditedByLine.get(l.id) ?? 0)) / Number(l.quantity))
+                        : 0,
+                      inv.currency
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -173,6 +187,15 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                 <span>Grand total</span>
                 <span className="font-mono">{formatMoney(total, inv.currency)}</span>
               </div>
+              {creditedTotal > 0 && (
+                <>
+                  <Row label="Less returns" value={`− ${formatMoney(creditedTotal, inv.currency)}`} />
+                  <div className="border-t pt-2 flex justify-between font-semibold text-base">
+                    <span>Net total</span>
+                    <span className="font-mono">{formatMoney(total - creditedTotal, inv.currency)}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </CardContent>

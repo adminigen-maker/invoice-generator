@@ -123,6 +123,7 @@ export type DocumentPdfProps = {
   totals: { untaxed: number; tax: number; total: number };
   showTax?: boolean;
   showPrices?: boolean; // false for delivery notes (goods issue, no money columns)
+  note?: string;        // small grey line under the totals (e.g. returns applied)
 };
 
 const num = (n: number) => Number(n || 0).toFixed(2);
@@ -258,6 +259,11 @@ export function DocumentPdf(p: DocumentPdfProps) {
           </View>
         </View>
         )}
+
+        {/* Optional note (e.g. "Net of returns — credit note CN-…") */}
+        {p.note ? (
+          <Text style={{ marginTop: 6, fontSize: 8, color: "#6b7280" }}>{p.note}</Text>
+        ) : null}
 
         {/* Signature line */}
         <View style={styles.signRow}>
