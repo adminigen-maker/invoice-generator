@@ -30,7 +30,7 @@ export default async function ProductsPage({
 
   let query = supabase
     .from("product")
-    .select("id, sku, name, sale_price, cost_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name)")
+    .select("id, sku, name, sale_price, cost_price, last_purchase_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name)")
     .order("name")
     .limit(200);
 
@@ -111,9 +111,23 @@ export default async function ProductsPage({
                 <RowCheck id={p.id} />
                 <TableCell className="font-mono text-xs">{p.sku}</TableCell>
                 <TableCell className="font-medium">
-                  {perms.has(P.inventory.productEdit) ? (
-                    <Link href={`/products/${p.id}`} className="text-blue-600 hover:text-blue-700">{p.name}</Link>
-                  ) : p.name}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {perms.has(P.inventory.productEdit) ? (
+                      <Link href={`/products/${p.id}`} className="text-blue-600 hover:text-blue-700">{p.name}</Link>
+                    ) : p.name}
+                    {(() => {
+                      const lpp = (p as { last_purchase_price?: number | null }).last_purchase_price;
+                      const cost = (p as { cost_price?: number | null }).cost_price;
+                      if (!perms.has(P.inventory.productViewCost) || lpp == null || cost == null) return null;
+                      if (Math.abs(Number(lpp) - Number(cost)) <= 0.005) return null;
+                      const up = Number(lpp) > Number(cost);
+                      return (
+                        <Badge variant="warning" className="font-normal whitespace-nowrap" title={`Last purchased at ${formatMoney(Number(lpp))} vs master cost ${formatMoney(Number(cost))}`}>
+                          Last buy {formatMoney(Number(lpp))} {up ? "↑" : "↓"}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                 </TableCell>
                 <TableCell>{(p.category as { name?: string } | null)?.name ?? "—"}</TableCell>
                 <TableCell>{(p.uom as { code?: string } | null)?.code ?? "—"}</TableCell>

@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { computeLine, computeTotals } from "@/lib/pricing";
-import { formatMoney } from "@/lib/utils";
+import { formatMoney, formatDate } from "@/lib/utils";
+import { getCustomerLastPrice } from "@/lib/customer-price";
 import { saveQuotation, confirmQuotation } from "./actions";
 import { QuickAddCustomer } from "@/components/quick-add/quick-add-customer";
 import { QuickAddProduct } from "@/components/quick-add/quick-add-product";
@@ -141,8 +142,29 @@ export function QuotationForm({
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
 
+  // The customer's last price per product (null = never bought). Used to warn
+  // when the price being quoted is higher than what they paid before.
+  const [priceHist, setPriceHist] = useState<Record<string, { price: number; date: string } | null>>({});
+  function loadHist(cust: string, productId: string) {
+    if (!cust || !productId || priceHist[productId] !== undefined) return;
+    getCustomerLastPrice(cust, productId).then((r) => setPriceHist((prev) => ({ ...prev, [productId]: r })));
+  }
+  function onCustomerChange(id: string) {
+    setCustomerId(id);
+    setPriceHist({});
+    if (!id) return;
+    const seen = new Set<string>();
+    for (const l of lines) {
+      if (l.product_id && !seen.has(l.product_id)) {
+        seen.add(l.product_id);
+        getCustomerLastPrice(id, l.product_id).then((r) => setPriceHist((prev) => ({ ...prev, [l.product_id]: r })));
+      }
+    }
+  }
+
   function pickProduct(i: number, productId: string) {
     const p = prodMap.get(productId);
+    loadHist(customerId, productId);
     updateLine(i, {
       product_id: productId,
       description: p?.label.split(" — ").slice(1).join(" — ") || p?.label || "",
@@ -226,7 +248,7 @@ export function QuotationForm({
             <select
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
+              onChange={(e) => onCustomerChange(e.target.value)}
               disabled={isReadOnly}
             >
               <option value="">— select customer —</option>
@@ -311,6 +333,12 @@ export function QuotationForm({
                     {lp?.extra?.stock != null && (
                       <div className={`text-[11px] mt-1 ${Number(lp.extra.stock) <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
                         In stock: {Number(lp.extra.stock).toFixed(2)}{lockedUomCode ? ` ${lockedUomCode}` : ""}
+                      </div>
+                    )}
+                    {l.product_id && priceHist[l.product_id] && (
+                      <div className={`text-[11px] mt-1 ${Number(l.unit_price) > priceHist[l.product_id]!.price ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
+                        Last to customer: {formatMoney(priceHist[l.product_id]!.price, currency)} · {formatDate(priceHist[l.product_id]!.date)}
+                        {Number(l.unit_price) > priceHist[l.product_id]!.price ? " ↑ higher" : ""}
                       </div>
                     )}
                   </td>
