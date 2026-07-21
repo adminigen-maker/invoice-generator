@@ -13,7 +13,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
   const perms = await getPermissions();
 
-  const [{ data: po }, { data: vendors }, { data: products }, { data: uoms }, { data: warehouses }] = await Promise.all([
+  const [{ data: po }, { data: vendors }, { data: products }, { data: uoms }, { data: warehouses }, { data: taxes }] = await Promise.all([
     supabase.from("purchase_order")
       .select("*, vendor:vendor(name), lines:purchase_order_line(product_id, description, quantity, uom_id, unit_price, discount_pct, tax_pct, sequence)")
       .eq("id", id).maybeSingle(),
@@ -21,6 +21,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
     supabase.from("product").select("id, sku, name, cost_price, uom_id").order("name"),
     supabase.from("unit_of_measure").select("id, code").order("code"),
     supabase.from("warehouse").select("id, code, name").order("code"),
+    supabase.from("tax_rate").select("id, code, rate").order("code"),
   ]);
 
   if (!po) return notFound();
@@ -74,6 +75,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             products={(products ?? []).map((p) => ({ id: p.id, label: `${p.sku} — ${p.name}`, extra: { cost_price: p.cost_price, uom_id: p.uom_id } }))}
             uoms={(uoms ?? []).map((u) => ({ id: u.id, label: u.code }))}
             warehouses={(warehouses ?? []).map((w) => ({ id: w.id, label: `${w.code} — ${w.name}` }))}
+            taxes={(taxes ?? []).map((t) => ({ id: t.id, label: `${t.code} (${Number(t.rate).toFixed(2)}%)` }))}
           />
         </CardContent>
       </Card>

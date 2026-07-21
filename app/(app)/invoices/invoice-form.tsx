@@ -126,9 +126,23 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
     [lines, taxMap]
   );
 
+  /** Lines asking for more than we hold (stockable products only). */
+  function overStockLines() {
+    return lines.filter((l) => {
+      const p = l.product_id ? prodMap.get(l.product_id) : undefined;
+      const stock = p?.extra?.stock;
+      return stock != null && Number(l.quantity) > Number(stock);
+    });
+  }
+
   function onSave() {
     if (!customerId) {
       toast.error("Select a customer");
+      return;
+    }
+    const over = overStockLines();
+    if (over.length) {
+      toast.error(`Not enough stock on ${over.length} line${over.length > 1 ? "s" : ""} — reduce the quantity or restock first.`);
       return;
     }
     startTx(async () => {
@@ -230,11 +244,16 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    {lp?.extra?.stock != null && (
-                      <div className={`text-[11px] mt-1 ${Number(lp.extra.stock) <= 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                        In stock: {Number(lp.extra.stock).toFixed(2)}{lockedUomCode ? ` ${lockedUomCode}` : ""}
-                      </div>
-                    )}
+                    {lp?.extra?.stock != null && (() => {
+                      const stock = Number(lp.extra!.stock);
+                      const over = Number(l.quantity) > stock;
+                      return (
+                        <div className={`text-[11px] mt-1 ${over || stock <= 0 ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                          In stock: {stock.toFixed(2)}{lockedUomCode ? ` ${lockedUomCode}` : ""}
+                          {over && ` — only ${stock.toFixed(2)} available`}
+                        </div>
+                      );
+                    })()}
                     {l.product_id && priceHist[l.product_id] && (
                       <div className={`text-[11px] mt-1 ${Number(l.unit_price) > priceHist[l.product_id]!.price ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
                         Last to customer: {formatMoney(priceHist[l.product_id]!.price, currency)} · {formatDate(priceHist[l.product_id]!.date)}

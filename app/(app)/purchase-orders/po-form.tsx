@@ -38,8 +38,8 @@ const emptyLine = (): Line => ({ key: crypto.randomUUID(), product_id: "", descr
  * they are NOT written back onto the product master. Receiving posts stock.
  */
 export function PurchaseOrderForm({
-  initial, vendors: vendorsInit, products: productsInit, uoms: uomsInit, warehouses,
-}: { initial?: POInitial | null; vendors: Opt[]; products: Opt[]; uoms: Opt[]; warehouses: Opt[] }) {
+  initial, vendors: vendorsInit, products: productsInit, uoms: uomsInit, warehouses, taxes = [],
+}: { initial?: POInitial | null; vendors: Opt[]; products: Opt[]; uoms: Opt[]; warehouses: Opt[]; taxes?: Opt[] }) {
   const router = useRouter();
   const [pending, startTx] = useTransition();
 
@@ -243,6 +243,7 @@ export function PurchaseOrderForm({
       <QuickAddVendor
         open={vendorAddOpen}
         onClose={() => setVendorAddOpen(false)}
+        taxes={taxes}
         onCreated={(item) => { setVendors((prev) => [...prev, item]); setVendorId(item.id); }}
       />
       <QuickAddProduct

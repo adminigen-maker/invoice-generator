@@ -41,17 +41,39 @@ async function nextCode() {
 
 export type QuickVendor = { id: string; label: string };
 
-/** Create a vendor inline (name only, auto code) from the PO form. */
+/** Create a vendor inline from the PO form — same detail as the vendor master. */
 export async function quickCreateVendor(input: unknown): Promise<{ ok: true; item: QuickVendor } | { ok: false; error: string }> {
   try {
     await requirePermission(P.procurement.vendorCreate);
-    const v = z.object({ name: z.string().min(1, "Name required") }).parse(input);
+    const v = z.object({
+      name: z.string().min(1, "Name required"),
+      legal_name: z.string().optional().nullable(),
+      tax_registration_number: z.string().optional().nullable(),
+      email: z.string().email("Enter a valid email").optional().or(z.literal("")).nullable(),
+      phone: z.string().optional().nullable(),
+      payment_terms_days: z.coerce.number().int().min(0).default(30),
+      default_tax_id: z.string().uuid().optional().or(z.literal("")).nullable(),
+      currency: z.string().default("AED"),
+      notes: z.string().optional().nullable(),
+    }).parse(input);
     const supabase = await createClient();
     const code = await nextCode();
     const { data: user } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("vendor")
-      .insert({ code, name: v.name, created_by: user.user?.id })
+      .insert({
+        code,
+        name: v.name,
+        legal_name: v.legal_name || null,
+        tax_registration_number: v.tax_registration_number || null,
+        email: v.email || null,
+        phone: v.phone || null,
+        payment_terms_days: v.payment_terms_days,
+        default_tax_id: v.default_tax_id || null,
+        currency: v.currency || "AED",
+        notes: v.notes || null,
+        created_by: user.user?.id,
+      })
       .select("id, code, name")
       .single();
     if (error) return { ok: false, error: error.message };

@@ -10,11 +10,12 @@ export const metadata = { title: "New purchase order" };
 export default async function NewPurchaseOrderPage() {
   if (!(await can(P.procurement.poCreate))) redirect("/purchase-orders");
   const supabase = await createClient();
-  const [{ data: vendors }, { data: products }, { data: uoms }, { data: warehouses }] = await Promise.all([
+  const [{ data: vendors }, { data: products }, { data: uoms }, { data: warehouses }, { data: taxes }] = await Promise.all([
     supabase.from("vendor").select("id, code, name").eq("is_active", true).order("name"),
     supabase.from("product").select("id, sku, name, cost_price, uom_id").eq("is_active", true).order("name"),
     supabase.from("unit_of_measure").select("id, code").eq("is_active", true).order("code"),
     supabase.from("warehouse").select("id, code, name").eq("is_active", true).order("code"),
+    supabase.from("tax_rate").select("id, code, rate").eq("is_active", true).order("code"),
   ]);
 
   return (
@@ -27,6 +28,7 @@ export default async function NewPurchaseOrderPage() {
             products={(products ?? []).map((p) => ({ id: p.id, label: `${p.sku} — ${p.name}`, extra: { cost_price: p.cost_price, uom_id: p.uom_id } }))}
             uoms={(uoms ?? []).map((u) => ({ id: u.id, label: u.code }))}
             warehouses={(warehouses ?? []).map((w) => ({ id: w.id, label: `${w.code} — ${w.name}` }))}
+            taxes={(taxes ?? []).map((t) => ({ id: t.id, label: `${t.code} (${Number(t.rate).toFixed(2)}%)` }))}
           />
         </CardContent>
       </Card>
