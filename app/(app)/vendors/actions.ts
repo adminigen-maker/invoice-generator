@@ -39,6 +39,31 @@ async function nextCode() {
   return (data as string) ?? `VEND-${Date.now()}`;
 }
 
+export type QuickVendor = { id: string; label: string };
+
+/** Create a vendor inline (name only, auto code) from the PO form. */
+export async function quickCreateVendor(input: unknown): Promise<{ ok: true; item: QuickVendor } | { ok: false; error: string }> {
+  try {
+    await requirePermission(P.procurement.vendorCreate);
+    const v = z.object({ name: z.string().min(1, "Name required") }).parse(input);
+    const supabase = await createClient();
+    const code = await nextCode();
+    const { data: user } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("vendor")
+      .insert({ code, name: v.name, created_by: user.user?.id })
+      .select("id, code, name")
+      .single();
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/vendors");
+    return { ok: true, item: { id: data.id, label: `${data.code} — ${data.name}` } };
+  } catch (e) {
+    if ((e as { code?: string })?.code === "PERMISSION_DENIED") return { ok: false, error: "You don't have permission to add vendors." };
+    if (e instanceof z.ZodError) return { ok: false, error: e.issues[0].message };
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export async function createVendor(fd: FormData): Promise<FormResult> {
   try {
     await requirePermission(P.procurement.vendorCreate);

@@ -49,7 +49,7 @@ export default async function PurchaseOrdersPage({
   const csvRows = (rows ?? []).map((r) => ({
     id: r.id,
     Number: r.number,
-    Vendor: (r.vendor_name as string | null) ?? (r.vendor as { name?: string } | null)?.name ?? "",
+    Vendor: (r.vendor as { name?: string } | null)?.name ?? (r.vendor_name as string | null) ?? "",
     "Order date": r.order_date,
     Expected: r.expected_date ?? "",
     Status: r.status,
@@ -104,7 +104,7 @@ export default async function PurchaseOrdersPage({
                 <TableCell className="font-mono text-xs">
                   <Link href={`/purchase-orders/${r.id}`} className="text-blue-600 hover:text-blue-700">{r.number}</Link>
                 </TableCell>
-                <TableCell className="font-medium">{(r.vendor_name as string | null) ?? (r.vendor as { name?: string } | null)?.name ?? "—"}</TableCell>
+                <TableCell className="font-medium">{(r.vendor as { name?: string } | null)?.name ?? (r.vendor_name as string | null) ?? "—"}</TableCell>
                 <TableCell>{formatDate(r.order_date)}</TableCell>
                 <TableCell>{r.expected_date ? formatDate(r.expected_date) : "—"}</TableCell>
                 <TableCell><StatusBadge status={r.status} /></TableCell>

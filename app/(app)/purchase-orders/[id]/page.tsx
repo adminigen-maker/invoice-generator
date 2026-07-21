@@ -13,18 +13,20 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
   const perms = await getPermissions();
 
-  const { data: po } = await supabase
-    .from("purchase_order")
-    .select("*, vendor:vendor(name), lines:purchase_order_line(description, quantity, uom_text, unit_price, discount_pct, tax_pct, sequence)")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: po }, { data: vendors }, { data: products }, { data: uoms }, { data: warehouses }] = await Promise.all([
+    supabase.from("purchase_order")
+      .select("*, vendor:vendor(name), lines:purchase_order_line(product_id, description, quantity, uom_id, unit_price, discount_pct, tax_pct, sequence)")
+      .eq("id", id).maybeSingle(),
+    supabase.from("vendor").select("id, code, name").order("name"),
+    supabase.from("product").select("id, sku, name, cost_price, uom_id").order("name"),
+    supabase.from("unit_of_measure").select("id, code").order("code"),
+    supabase.from("warehouse").select("id, code, name").order("code"),
+  ]);
 
   if (!po) return notFound();
-  // vendor_name is the standalone field; fall back to a linked vendor for any
-  // legacy rows created before the standalone change.
-  const vendorName = (po.vendor_name as string | null) ?? (po.vendor as { name?: string } | null)?.name ?? "";
-  type PoLine = { sequence: number; description: string; quantity: number; uom_text: string | null; unit_price: number; discount_pct: number; tax_pct: number };
+  type PoLine = { sequence: number; product_id: string | null; description: string; quantity: number; uom_id: string | null; unit_price: number; discount_pct: number; tax_pct: number };
   const lines = ((po.lines ?? []) as PoLine[]).slice().sort((a, b) => a.sequence - b.sequence);
+  const vendorName = (po.vendor as { name?: string } | null)?.name ?? (po.vendor_name as string | null) ?? "—";
 
   return (
     <div className="space-y-4 max-w-6xl">
@@ -35,7 +37,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <StatusBadge status={po.status} />
           </h1>
           <p className="text-sm text-muted-foreground">
-            {vendorName || "—"} · Ordered {formatDate(po.order_date)}
+            {vendorName} · Ordered {formatDate(po.order_date)}
             {po.received_at && <> · Received {formatDate(po.received_at)}</>}
           </p>
         </div>
@@ -53,14 +55,19 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           <PurchaseOrderForm
             initial={{
               id: po.id,
-              vendor_name: vendorName,
+              vendor_id: po.vendor_id ?? "",
               order_date: po.order_date,
               expected_date: po.expected_date,
+              warehouse_id: po.warehouse_id,
               currency: po.currency,
               notes: po.notes,
               status: po.status,
               lines,
             }}
+            vendors={(vendors ?? []).map((v) => ({ id: v.id, label: `${v.code} — ${v.name}` }))}
+            products={(products ?? []).map((p) => ({ id: p.id, label: `${p.sku} — ${p.name}`, extra: { cost_price: p.cost_price, uom_id: p.uom_id } }))}
+            uoms={(uoms ?? []).map((u) => ({ id: u.id, label: u.code }))}
+            warehouses={(warehouses ?? []).map((w) => ({ id: w.id, label: `${w.code} — ${w.name}` }))}
           />
         </CardContent>
       </Card>

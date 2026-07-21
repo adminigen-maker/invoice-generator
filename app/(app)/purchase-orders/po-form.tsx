@@ -11,55 +11,79 @@ import { Textarea } from "@/components/ui/textarea";
 import { computeLine, computeTotals } from "@/lib/pricing";
 import { formatMoney } from "@/lib/utils";
 import { savePurchaseOrder } from "./actions";
+import { QuickAddVendor } from "@/components/quick-add/quick-add-vendor";
+import { QuickAddProduct } from "@/components/quick-add/quick-add-product";
+import { QuickAddUom } from "@/components/quick-add/quick-add-uom";
 
-type Line = { key: string; description: string; quantity: string; uom_text: string; unit_price: string; discount_pct: string; tax_pct: string };
+type Opt = { id: string; label: string; extra?: Record<string, string | number | null> };
+type Line = { key: string; product_id: string; description: string; quantity: string; uom_id: string; unit_price: string; discount_pct: string; tax_pct: string };
 
 export type POInitial = {
   id: string;
-  vendor_name: string;
+  vendor_id: string;
   order_date: string;
   expected_date: string | null;
+  warehouse_id: string | null;
   currency: string;
   notes: string | null;
   status: string;
-  lines: Array<{ description: string; quantity: number | string; uom_text: string | null; unit_price: number | string; discount_pct: number | string; tax_pct: number | string }>;
+  lines: Array<{ product_id: string | null; description: string; quantity: number | string; uom_id: string | null; unit_price: number | string; discount_pct: number | string; tax_pct: number | string }>;
 };
 
-const emptyLine = (): Line => ({ key: crypto.randomUUID(), description: "", quantity: "1", uom_text: "", unit_price: "0", discount_pct: "0", tax_pct: "0" });
+const emptyLine = (): Line => ({ key: crypto.randomUUID(), product_id: "", description: "", quantity: "1", uom_id: "", unit_price: "0", discount_pct: "0", tax_pct: "0" });
 
 /**
- * Standalone purchase order — a plain document. Vendor is free text, and each
- * line is free text too (description / qty / unit / cost / tax %). Nothing links
- * to the product, vendor, unit or tax tables, and it does not affect stock.
+ * Purchase order. Product / Unit / Vendor are picked from master data (with
+ * inline "add new"). Qty / Unit cost / Disc % / Tax % are free per-PO values —
+ * they are NOT written back onto the product master. Receiving posts stock.
  */
-export function PurchaseOrderForm({ initial }: { initial?: POInitial | null }) {
+export function PurchaseOrderForm({
+  initial, vendors: vendorsInit, products: productsInit, uoms: uomsInit, warehouses,
+}: { initial?: POInitial | null; vendors: Opt[]; products: Opt[]; uoms: Opt[]; warehouses: Opt[] }) {
   const router = useRouter();
   const [pending, startTx] = useTransition();
 
-  const [vendorName, setVendorName] = useState(initial?.vendor_name ?? "");
+  const [vendors, setVendors] = useState(vendorsInit);
+  const [products, setProducts] = useState(productsInit);
+  const [uoms, setUoms] = useState(uomsInit);
+  const [vendorAddOpen, setVendorAddOpen] = useState(false);
+  const [productAddLine, setProductAddLine] = useState<number | null>(null);
+  const [uomAddLine, setUomAddLine] = useState<number | null>(null);
+
+  const [vendorId, setVendorId] = useState(initial?.vendor_id ?? "");
   const [orderDate, setOrderDate] = useState(initial?.order_date ?? new Date().toISOString().slice(0, 10));
   const [expectedDate, setExpectedDate] = useState(initial?.expected_date ?? "");
-  const [currency, setCurrency] = useState(initial?.currency ?? "AED");
+  const [warehouseId, setWarehouseId] = useState(initial?.warehouse_id ?? "");
+  const [currency] = useState(initial?.currency ?? "AED");
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
   const [lines, setLines] = useState<Line[]>(
     initial?.lines.length
       ? initial.lines.map((l) => ({
-          key: crypto.randomUUID(),
-          description: l.description ?? "",
-          quantity: String(l.quantity ?? "1"),
-          uom_text: l.uom_text ?? "",
-          unit_price: String(l.unit_price ?? "0"),
-          discount_pct: String(l.discount_pct ?? "0"),
-          tax_pct: String(l.tax_pct ?? "0"),
+          key: crypto.randomUUID(), product_id: l.product_id ?? "", description: l.description ?? "",
+          quantity: String(l.quantity ?? "1"), uom_id: l.uom_id ?? "", unit_price: String(l.unit_price ?? "0"),
+          discount_pct: String(l.discount_pct ?? "0"), tax_pct: String(l.tax_pct ?? "0"),
         }))
       : [emptyLine()]
   );
+
+  const prodMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const productOptions = useMemo(() => products.map((p) => <option key={p.id} value={p.id}>{p.label}</option>), [products]);
+  const uomOptions = useMemo(() => uoms.map((u) => <option key={u.id} value={u.id}>{u.label}</option>), [uoms]);
 
   const isReadOnly = !!(initial?.status && initial.status !== "draft");
 
   function updateLine(i: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+  function pickProduct(i: number, productId: string) {
+    const p = prodMap.get(productId);
+    updateLine(i, {
+      product_id: productId,
+      description: p?.label.split(" — ").slice(1).join(" — ") || p?.label || "",
+      unit_price: String(p?.extra?.cost_price ?? "0"),
+      uom_id: (p?.extra?.uom_id as string) ?? "",
+    });
   }
 
   const totals = useMemo(
@@ -68,24 +92,21 @@ export function PurchaseOrderForm({ initial }: { initial?: POInitial | null }) {
   );
 
   function onSave() {
-    if (!vendorName.trim()) {
-      toast.error("Enter a vendor name");
+    if (!vendorId) {
+      toast.error("Select a vendor");
       return;
     }
     startTx(async () => {
       const res = await savePurchaseOrder(initial?.id ?? null, {
-        vendor_name: vendorName.trim(),
+        vendor_id: vendorId,
         order_date: orderDate,
         expected_date: expectedDate || null,
+        warehouse_id: warehouseId || null,
         currency,
         notes: notes || null,
         lines: lines.map((l) => ({
-          description: l.description,
-          quantity: Number(l.quantity),
-          uom_text: l.uom_text || null,
-          unit_price: Number(l.unit_price),
-          discount_pct: Number(l.discount_pct),
-          tax_pct: Number(l.tax_pct) || 0,
+          product_id: l.product_id || null, description: l.description, quantity: Number(l.quantity),
+          uom_id: l.uom_id || null, unit_price: Number(l.unit_price), discount_pct: Number(l.discount_pct), tax_pct: Number(l.tax_pct) || 0,
         })),
       });
       if (!res.ok) { toast.error(res.error); return; }
@@ -100,7 +121,16 @@ export function PurchaseOrderForm({ initial }: { initial?: POInitial | null }) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="space-y-1.5 md:col-span-2">
           <Label>Vendor <span className="text-destructive">*</span></Label>
-          <Input value={vendorName} onChange={(e) => setVendorName(e.target.value)} disabled={isReadOnly} placeholder="Vendor / supplier name" />
+          <div className="flex gap-2">
+            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={vendorId} onChange={(e) => setVendorId(e.target.value)} disabled={isReadOnly}>
+              <option value="">— select vendor —</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+            </select>
+            {!isReadOnly && (
+              <Button type="button" variant="outline" size="icon" className="shrink-0" title="Add new vendor" onClick={() => setVendorAddOpen(true)}><Plus className="h-4 w-4" /></Button>
+            )}
+          </div>
         </div>
         <div className="space-y-1.5">
           <Label>Order date</Label>
@@ -110,15 +140,24 @@ export function PurchaseOrderForm({ initial }: { initial?: POInitial | null }) {
           <Label>Expected date</Label>
           <Input type="date" value={expectedDate ?? ""} onChange={(e) => setExpectedDate(e.target.value)} disabled={isReadOnly} />
         </div>
+        <div className="space-y-1.5 md:col-span-2">
+          <Label>Receive into warehouse</Label>
+          <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} disabled={isReadOnly}>
+            <option value="">— default —</option>
+            {warehouses.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="rounded-lg border overflow-x-auto">
-        <table className="w-full text-sm min-w-[720px]">
+        <table className="w-full text-sm min-w-[820px]">
           <thead className="bg-muted/50">
             <tr className="text-left">
+              <th className="p-2 w-[24%]">Product</th>
               <th className="p-2">Description</th>
               <th className="p-2 w-20 text-right">Qty</th>
-              <th className="p-2 w-24">Unit</th>
+              <th className="p-2 w-28">Unit</th>
               <th className="p-2 w-28 text-right">Unit cost</th>
               <th className="p-2 w-20 text-right">Disc %</th>
               <th className="p-2 w-20 text-right">Tax %</th>
@@ -131,9 +170,29 @@ export function PurchaseOrderForm({ initial }: { initial?: POInitial | null }) {
               const lt = computeLine({ quantity: l.quantity, unit_price: l.unit_price, discount_pct: l.discount_pct, tax_rate: Number(l.tax_pct) || 0 });
               return (
                 <tr key={l.key} className="border-t align-top">
-                  <td className="p-1.5"><Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly} className="h-9" placeholder="What you're ordering" /></td>
+                  <td className="p-1.5">
+                    <div className="flex gap-1">
+                      <select value={l.product_id} onChange={(e) => pickProduct(i, e.target.value)} disabled={isReadOnly}
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                        <option value="">—</option>
+                        {productOptions}
+                      </select>
+                      {!isReadOnly && (
+                        <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Add new product" onClick={() => setProductAddLine(i)}><Plus className="h-4 w-4" /></Button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-1.5"><Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly} className="h-9" /></td>
                   <td className="p-1.5"><Input type="number" step="0.01" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
-                  <td className="p-1.5"><Input value={l.uom_text} onChange={(e) => updateLine(i, { uom_text: e.target.value })} disabled={isReadOnly} className="h-9" placeholder="pcs" /></td>
+                  <td className="p-1.5">
+                    <div className="flex gap-1">
+                      <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })} disabled={isReadOnly}
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"><option value="">—</option>{uomOptions}</select>
+                      {!isReadOnly && (
+                        <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Add new unit" onClick={() => setUomAddLine(i)}><Plus className="h-4 w-4" /></Button>
+                      )}
+                    </div>
+                  </td>
                   <td className="p-1.5"><Input type="number" step="0.01" value={l.unit_price} onChange={(e) => updateLine(i, { unit_price: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
                   <td className="p-1.5"><Input type="number" step="0.01" value={l.discount_pct} onChange={(e) => updateLine(i, { discount_pct: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
                   <td className="p-1.5"><Input type="number" step="0.01" value={l.tax_pct} onChange={(e) => updateLine(i, { tax_pct: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
@@ -178,6 +237,33 @@ export function PurchaseOrderForm({ initial }: { initial?: POInitial | null }) {
           </Button>
         </div>
       )}
+
+      <QuickAddVendor
+        open={vendorAddOpen}
+        onClose={() => setVendorAddOpen(false)}
+        onCreated={(item) => { setVendors((prev) => [...prev, item]); setVendorId(item.id); }}
+      />
+      <QuickAddProduct
+        open={productAddLine !== null}
+        onClose={() => setProductAddLine(null)}
+        uoms={uoms}
+        taxes={[]}
+        onCreated={(item) => {
+          setProducts((prev) => [...prev, { id: item.id, label: item.label, extra: item.extra }]);
+          if (productAddLine !== null) {
+            const desc = item.label.split(" — ").slice(1).join(" — ") || item.label;
+            updateLine(productAddLine, { product_id: item.id, description: desc, uom_id: (item.extra.uom_id as string) ?? "" });
+          }
+        }}
+      />
+      <QuickAddUom
+        open={uomAddLine !== null}
+        onClose={() => setUomAddLine(null)}
+        onCreated={(item) => {
+          setUoms((prev) => [...prev, item]);
+          if (uomAddLine !== null) updateLine(uomAddLine, { uom_id: item.id });
+        }}
+      />
     </div>
   );
 }
