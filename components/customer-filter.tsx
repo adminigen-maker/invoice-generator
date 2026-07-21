@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 type Opt = { id: string; label: string };
 
@@ -19,16 +20,13 @@ export function CustomerFilter({ customers }: { customers: Opt[] }) {
   }
 
   return (
-    <select
-      value={current}
-      onChange={(e) => pick(e.target.value)}
-      aria-label="Filter by customer"
-      className="h-9 w-full sm:w-64 rounded-md border border-input bg-background px-2 text-sm"
-    >
-      <option value="">All customers</option>
-      {customers.map((c) => (
-        <option key={c.id} value={c.id}>{c.label}</option>
-      ))}
-    </select>
+    <div className="w-full sm:w-64">
+      <SearchableSelect
+        value={current}
+        onChange={pick}
+        options={customers.map((c) => ({ value: c.id, label: c.label }))}
+        placeholder="All customers"
+      />
+    </div>
   );
 }

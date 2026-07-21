@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import { quickCreateVendor, type QuickVendor } from "@/app/(app)/vendors/actions";
 
@@ -71,11 +72,12 @@ export function QuickAddVendor({
           </div>
           <div className="space-y-1.5">
             <Label>Default tax</Label>
-            <select value={taxId} onChange={(e) => setTaxId(e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm">
-              <option value="">— none —</option>
-              {taxes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
+            <SearchableSelect
+              value={taxId}
+              onChange={setTaxId}
+              options={taxes.map((t) => ({ value: t.id, label: t.label }))}
+              placeholder="— none —"
+            />
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

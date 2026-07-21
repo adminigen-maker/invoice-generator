@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { computeLine, computeTotals } from "@/lib/pricing";
 import { formatMoney } from "@/lib/utils";
 import { savePurchaseOrder } from "./actions";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { QuickAddVendor } from "@/components/quick-add/quick-add-vendor";
 import { QuickAddProduct } from "@/components/quick-add/quick-add-product";
 import { QuickAddUom } from "@/components/quick-add/quick-add-uom";
@@ -124,11 +125,15 @@ export function PurchaseOrderForm({
         <div className="space-y-1.5 md:col-span-2">
           <Label>Vendor <span className="text-destructive">*</span></Label>
           <div className="flex gap-2">
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={vendorId} onChange={(e) => setVendorId(e.target.value)} disabled={isReadOnly}>
-              <option value="">— select vendor —</option>
-              {vendors.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-            </select>
+            <div className="flex-1 min-w-0">
+              <SearchableSelect
+                value={vendorId}
+                onChange={setVendorId}
+                options={vendors.map((v) => ({ value: v.id, label: v.label }))}
+                placeholder="— select vendor —"
+                disabled={isReadOnly}
+              />
+            </div>
             {!isReadOnly && (
               <Button type="button" variant="outline" size="icon" className="shrink-0" title="Add new vendor" onClick={() => setVendorAddOpen(true)}><Plus className="h-4 w-4" /></Button>
             )}

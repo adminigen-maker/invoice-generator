@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { quickCreateProduct, type QuickProduct } from "@/app/(app)/products/actions";
 
 type Opt = { id: string; label: string };
@@ -63,16 +64,12 @@ export function QuickAddProduct({
           </div>
           <div className="space-y-1.5">
             <Label>Unit <span className="text-destructive">*</span></Label>
-            <select
+            <SearchableSelect
               value={uomId}
-              onChange={(e) => setUomId(e.target.value)}
-              required
-              className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
-            >
-              {uoms.map((u) => (
-                <option key={u.id} value={u.id}>{u.label}</option>
-              ))}
-            </select>
+              onChange={setUomId}
+              options={uoms.map((u) => ({ value: u.id, label: u.label }))}
+              placeholder="— select —"
+            />
           </div>
         </div>
         <p className="text-xs text-muted-foreground">SKU is generated automatically on save.</p>
@@ -83,16 +80,12 @@ export function QuickAddProduct({
           </div>
           <div className="space-y-1.5">
             <Label>Tax</Label>
-            <select
+            <SearchableSelect
               value={taxId}
-              onChange={(e) => setTaxId(e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
-            >
-              <option value="">— none —</option>
-              {taxes.map((t) => (
-                <option key={t.id} value={t.id}>{t.label}</option>
-              ))}
-            </select>
+              onChange={setTaxId}
+              options={taxes.map((t) => ({ value: t.id, label: t.label }))}
+              placeholder="— none —"
+            />
           </div>
         </div>
         <div className="flex justify-end gap-2 pt-2">

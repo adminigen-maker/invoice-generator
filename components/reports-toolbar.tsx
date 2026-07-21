@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Download, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 type Opt = { id: string; label: string };
 
@@ -61,18 +62,14 @@ export function ReportsToolbar({
         <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
       </div>
       {customers.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-1 w-56">
           <label className="text-xs text-muted-foreground">Customer</label>
-          <select
+          <SearchableSelect
             value={customer}
-            onChange={(e) => setCustomer(e.target.value)}
-            className="h-9 w-56 rounded-md border border-input bg-background px-2 text-sm"
-          >
-            <option value="">All customers</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
+            onChange={setCustomer}
+            options={customers.map((c) => ({ value: c.id, label: c.label }))}
+            placeholder="All customers"
+          />
         </div>
       )}
       <Button size="sm" onClick={apply}><Filter className="h-4 w-4 mr-1" />Apply</Button>

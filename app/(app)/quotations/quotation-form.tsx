@@ -12,6 +12,7 @@ import { computeLine, computeTotals } from "@/lib/pricing";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { getCustomerLastPrice } from "@/lib/customer-price";
 import { saveQuotation, confirmQuotation } from "./actions";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { QuickAddCustomer } from "@/components/quick-add/quick-add-customer";
 import { QuickAddProduct } from "@/components/quick-add/quick-add-product";
 
@@ -132,10 +133,6 @@ export function QuotationForm({
   const taxOptions = useMemo(
     () => taxes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>),
     [taxes]
-  );
-  const customerOptions = useMemo(
-    () => customers.map((c) => <option key={c.id} value={c.id}>{c.label}</option>),
-    [customers]
   );
 
   function updateLine(i: number, patch: Partial<Line>) {
@@ -259,15 +256,15 @@ export function QuotationForm({
         <div className="space-y-1.5 md:col-span-2">
           <Label>Customer <span className="text-destructive">*</span></Label>
           <div className="flex gap-2">
-            <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={customerId}
-              onChange={(e) => onCustomerChange(e.target.value)}
-              disabled={isReadOnly}
-            >
-              <option value="">— select customer —</option>
-              {customerOptions}
-            </select>
+            <div className="flex-1 min-w-0">
+              <SearchableSelect
+                value={customerId}
+                onChange={onCustomerChange}
+                options={customers.map((c) => ({ value: c.id, label: c.label }))}
+                placeholder="— select customer —"
+                disabled={isReadOnly}
+              />
+            </div>
             {!isReadOnly && (
               <Button
                 type="button"
