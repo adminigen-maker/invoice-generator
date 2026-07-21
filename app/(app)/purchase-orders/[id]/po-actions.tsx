@@ -33,7 +33,7 @@ export function PoActions({
         </Button>
       )}
       {isConfirmed && canReceive && (
-        <Button onClick={() => run(receivePurchaseOrder, "Received into stock")} disabled={pending}>
+        <Button onClick={() => run(receivePurchaseOrder, "Marked as received")} disabled={pending}>
           {pending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PackageCheck className="h-4 w-4 mr-2" />}Receive
         </Button>
       )}
