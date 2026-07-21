@@ -8,24 +8,29 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
+import { SortHeader } from "@/components/sort-header";
+import { resolveSort } from "@/lib/list-sort";
 import { deletePayment } from "./actions";
 import { RecordPaymentButton } from "./record-payment-dialog";
 
 export const dynamic = "force-dynamic";
 
+const SORTABLE = ["number", "payment_date", "method", "reference", "amount", "amount_unallocated", "created_at"] as const;
+
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; sort?: string; dir?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, sort, dir } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
+  const order = resolveSort(sort, dir, SORTABLE);
 
   let query = supabase
     .from("payment")
     .select("id, number, payment_date, method, reference, amount, amount_unallocated, currency, created_at, customer:customer(name)")
-    .order("payment_date", { ascending: false })
+    .order(order.column, { ascending: order.ascending })
     .limit(200);
 
   const term = ilikeTerm(q);
@@ -85,14 +90,14 @@ export default async function PaymentsPage({
           <TableHeader>
             <TableRow>
               <SelectAllHead ids={ids} />
-              <TableHead>Number</TableHead>
+              <SortHeader column="number">Number</SortHeader>
               <TableHead>Customer</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Method</TableHead>
-              <TableHead>Reference</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Unallocated</TableHead>
-              <TableHead>Created</TableHead>
+              <SortHeader column="payment_date">Date</SortHeader>
+              <SortHeader column="method">Method</SortHeader>
+              <SortHeader column="reference">Reference</SortHeader>
+              <SortHeader column="amount" className="text-right">Amount</SortHeader>
+              <SortHeader column="amount_unallocated" className="text-right">Unallocated</SortHeader>
+              <SortHeader column="created_at">Created</SortHeader>
               {canDelete && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>

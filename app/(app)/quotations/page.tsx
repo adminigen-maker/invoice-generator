@@ -15,25 +15,30 @@ import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { canCancelDoc, canDeleteDoc } from "@/lib/doc-status";
 import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
+import { SortHeader } from "@/components/sort-header";
+import { resolveSort } from "@/lib/list-sort";
 import { cancelQuotation, deleteQuotation } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 const INACTIVE = "(cancelled,closed)";
 
+const SORTABLE = ["number", "quote_date", "valid_until", "status", "total", "created_at"] as const;
+
 export default async function QuotationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; view?: string; sort?: string; dir?: string }>;
 }) {
-  const { q, view = "active" } = await searchParams;
+  const { q, view = "active", sort, dir } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
+  const order = resolveSort(sort, dir, SORTABLE);
 
   let query = supabase
     .from("quotation")
     .select("id, number, quote_date, valid_until, status, total, currency, created_at, customer:customer(name)")
-    .order("quote_date", { ascending: false })
+    .order(order.column, { ascending: order.ascending })
     .limit(200);
 
   if (view === "active") query = query.not("status", "in", INACTIVE);
@@ -83,13 +88,13 @@ export default async function QuotationsPage({
           <TableHeader>
             <TableRow>
               <SelectAllHead ids={ids} />
-              <TableHead>Number</TableHead>
+              <SortHeader column="number">Number</SortHeader>
               <TableHead>Customer</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Valid until</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Created</TableHead>
+              <SortHeader column="quote_date">Date</SortHeader>
+              <SortHeader column="valid_until">Valid until</SortHeader>
+              <SortHeader column="status">Status</SortHeader>
+              <SortHeader column="total" className="text-right">Total</SortHeader>
+              <SortHeader column="created_at">Created</SortHeader>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>

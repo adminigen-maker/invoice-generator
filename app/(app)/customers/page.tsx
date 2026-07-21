@@ -13,24 +13,29 @@ import {
 import { ListToolbar } from "@/components/list-toolbar";
 import { RowActions } from "@/components/row-actions";
 import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
+import { SortHeader } from "@/components/sort-header";
+import { resolveSort } from "@/lib/list-sort";
 import { setCustomerActive, deleteCustomer } from "./actions";
 import { ilikeTerm } from "@/lib/list-query";
 
 export const dynamic = "force-dynamic";
 
+const SORTABLE = ["code", "name", "tax_registration_number", "credit_limit", "payment_terms_days", "is_active", "created_at"] as const;
+
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; view?: string; sort?: string; dir?: string }>;
 }) {
-  const { q, view = "active" } = await searchParams;
+  const { q, view = "active", sort, dir } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
+  const order = resolveSort(sort, dir, SORTABLE);
 
   let query = supabase
     .from("customer")
     .select("id, code, name, tax_registration_number, credit_limit, payment_terms_days, is_active, created_at")
-    .order("name")
+    .order(order.column, { ascending: order.ascending })
     .limit(200);
 
   if (view === "active") query = query.eq("is_active", true);
@@ -80,13 +85,13 @@ export default async function CustomersPage({
           <TableHeader>
             <TableRow>
               <SelectAllHead ids={ids} />
-              <TableHead>Code</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>TRN</TableHead>
-              <TableHead className="text-right">Credit limit</TableHead>
-              <TableHead>Payment terms</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
+              <SortHeader column="code">Code</SortHeader>
+              <SortHeader column="name">Name</SortHeader>
+              <SortHeader column="tax_registration_number">TRN</SortHeader>
+              <SortHeader column="credit_limit" className="text-right">Credit limit</SortHeader>
+              <SortHeader column="payment_terms_days">Payment terms</SortHeader>
+              <SortHeader column="is_active">Status</SortHeader>
+              <SortHeader column="created_at">Created</SortHeader>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>

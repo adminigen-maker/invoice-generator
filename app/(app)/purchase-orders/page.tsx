@@ -12,25 +12,30 @@ import { ListToolbar } from "@/components/list-toolbar";
 import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
+import { SortHeader } from "@/components/sort-header";
+import { resolveSort } from "@/lib/list-sort";
 import { cancelPurchaseOrder, deletePurchaseOrder } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 const INACTIVE = "(cancelled,closed)";
 
+const SORTABLE = ["number", "order_date", "expected_date", "status", "total", "created_at"] as const;
+
 export default async function PurchaseOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; view?: string; sort?: string; dir?: string }>;
 }) {
-  const { q, view = "active" } = await searchParams;
+  const { q, view = "active", sort, dir } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
+  const order = resolveSort(sort, dir, SORTABLE);
 
   let query = supabase
     .from("purchase_order")
     .select("id, number, order_date, expected_date, status, total, currency, created_at, vendor_name, vendor:vendor(name)")
-    .order("order_date", { ascending: false })
+    .order(order.column, { ascending: order.ascending })
     .limit(200);
 
   if (view === "active") query = query.not("status", "in", INACTIVE);
@@ -80,13 +85,13 @@ export default async function PurchaseOrdersPage({
           <TableHeader>
             <TableRow>
               <SelectAllHead ids={ids} />
-              <TableHead>Number</TableHead>
+              <SortHeader column="number">Number</SortHeader>
               <TableHead>Vendor</TableHead>
-              <TableHead>Order date</TableHead>
-              <TableHead>Expected</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Created</TableHead>
+              <SortHeader column="order_date">Order date</SortHeader>
+              <SortHeader column="expected_date">Expected</SortHeader>
+              <SortHeader column="status">Status</SortHeader>
+              <SortHeader column="total" className="text-right">Total</SortHeader>
+              <SortHeader column="created_at">Created</SortHeader>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>

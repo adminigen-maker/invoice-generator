@@ -11,25 +11,30 @@ import { DocRowActions } from "@/components/doc-row-actions";
 import { ilikeTerm } from "@/lib/list-query";
 import { canDeleteDoc } from "@/lib/doc-status";
 import { SelectionProvider, BulkBar, RowCheck, SelectAllHead } from "@/components/bulk-select";
+import { SortHeader } from "@/components/sort-header";
+import { resolveSort } from "@/lib/list-sort";
 import { deleteDeliveryNote } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 const INACTIVE = "(cancelled,closed)";
 
+const SORTABLE = ["number", "delivery_date", "status", "posted_at", "created_at"] as const;
+
 export default async function DeliveryNotesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; view?: string; sort?: string; dir?: string }>;
 }) {
-  const { q, view = "active" } = await searchParams;
+  const { q, view = "active", sort, dir } = await searchParams;
   const supabase = await createClient();
   const perms = await getPermissions();
+  const order = resolveSort(sort, dir, SORTABLE);
 
   let query = supabase
     .from("delivery_note")
     .select("id, number, delivery_date, status, posted_at, created_at, sales_order:sales_order(number, customer:customer(name))")
-    .order("delivery_date", { ascending: false })
+    .order(order.column, { ascending: order.ascending })
     .limit(200);
 
   if (view === "active") query = query.not("status", "in", INACTIVE);
@@ -75,13 +80,13 @@ export default async function DeliveryNotesPage({
           <TableHeader>
             <TableRow>
               <SelectAllHead ids={ids} />
-              <TableHead>Number</TableHead>
+              <SortHeader column="number">Number</SortHeader>
               <TableHead>Sales Order</TableHead>
               <TableHead>Customer</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Posted</TableHead>
-              <TableHead>Created</TableHead>
+              <SortHeader column="delivery_date">Date</SortHeader>
+              <SortHeader column="status">Status</SortHeader>
+              <SortHeader column="posted_at">Posted</SortHeader>
+              <SortHeader column="created_at">Created</SortHeader>
               {showActions && <TableHead className="text-right w-24">Actions</TableHead>}
             </TableRow>
           </TableHeader>
