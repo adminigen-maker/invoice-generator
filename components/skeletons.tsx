@@ -18,14 +18,14 @@ export function PageHeaderSkeleton({ action = true }: { action?: boolean }) {
 export function TableSkeleton({ rows = 8, cols = 6 }: { rows?: number; cols?: number }) {
   return (
     <Card className="overflow-hidden">
-      <div className="border-b px-3 py-3">
+      <div className="px-3 py-3">
         <div className="flex gap-4">
           {Array.from({ length: cols }).map((_, i) => (
             <Skeleton key={i} className="h-4 flex-1" />
           ))}
         </div>
       </div>
-      <div className="divide-y">
+      <div>
         {Array.from({ length: rows }).map((_, r) => (
           <div key={r} className="flex gap-4 px-3 py-3.5">
             {Array.from({ length: cols }).map((_, c) => (
