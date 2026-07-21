@@ -9,21 +9,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PostInvoiceButton, RecordPaymentForm, CancelInvoiceButton } from "./client-actions";
+import { ReturnCreditButton } from "./return-credit";
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const [{ data: inv }, canPost, canPay, canCancel] = await Promise.all([
+  const [{ data: inv }, canPost, canPay, canCancel, canCredit, { data: creditLines }] = await Promise.all([
     supabase.from("invoice").select(`
       *,
       customer:customer(name, code, tax_registration_number),
-      lines:invoice_line(sequence, description, product:product(sku, name), uom:unit_of_measure(code),
+      lines:invoice_line(id, sequence, description, product:product(sku, name), uom:unit_of_measure(code),
         quantity, unit_price, discount_pct, line_total, tax:tax_rate(code, rate)),
-      allocations:payment_allocation(amount_allocated, payment:payment(number, payment_date, method, reference))
+      allocations:payment_allocation(amount_allocated, payment:payment(number, payment_date, method, reference)),
+      credits:credit_note(id, number, credit_date, total, reason, status)
     `).eq("id", id).maybeSingle(),
     can(P.invoice.post),
     can(P.invoice.paymentCreate),
     can(P.invoice.edit),
+    can(P.invoice.creditNoteCreate),
+    supabase
+      .from("credit_note_line")
+      .select("invoice_line_id, quantity, credit_note:credit_note!inner(invoice_id, status)")
+      .eq("credit_note.invoice_id", id)
+      .neq("credit_note.status", "cancelled"),
   ]);
   if (!inv) return notFound();
 
@@ -37,6 +45,22 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
 
   const lines = ((inv.lines ?? []) as LineRow[]).slice().sort((a, b) => a.sequence - b.sequence);
   const allocations = (inv.allocations ?? []) as AllocRow[];
+  const credits = ((inv.credits ?? []) as CreditRow[]).filter((c) => c.status !== "cancelled");
+  const creditedTotal = Number(inv.credited_total ?? 0);
+
+  // How much of each line has already come back, so the return dialog only
+  // offers what's still returnable.
+  const creditedByLine = new Map<string, number>();
+  for (const cl of (creditLines ?? []) as Array<{ invoice_line_id: string | null; quantity: number }>) {
+    if (cl.invoice_line_id) creditedByLine.set(cl.invoice_line_id, (creditedByLine.get(cl.invoice_line_id) ?? 0) + Number(cl.quantity));
+  }
+  const returnableLines = lines.map((l) => ({
+    id: l.id,
+    description: l.product?.name ?? l.description,
+    quantity: Number(l.quantity),
+    credited: creditedByLine.get(l.id) ?? 0,
+    unit_price: Number(l.unit_price),
+  }));
 
   return (
     <div className="space-y-4 max-w-6xl">
@@ -54,6 +78,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <div className="flex flex-wrap gap-2">
           <PdfButton url={`/invoices/${id}/pdf`} filename={`${inv.number}.pdf`} />
           {!posted && canPost && <PostInvoiceButton id={inv.id} />}
+          {posted && canCredit && (
+            <ReturnCreditButton invoiceId={inv.id} currency={inv.currency} lines={returnableLines} />
+          )}
           {isDraft && canCancel && <CancelInvoiceButton id={inv.id} />}
         </div>
       </div>
@@ -85,9 +112,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
       </Card>
 
       {/* Summary stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${creditedTotal > 0 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
         <StatCard label="Invoice total" value={formatMoney(total, inv.currency)} />
         <StatCard label="Amount paid" value={formatMoney(paid, inv.currency)} tone="success" />
+        {creditedTotal > 0 && (
+          <StatCard label="Credited (returns)" value={`− ${formatMoney(creditedTotal, inv.currency)}`} />
+        )}
         <StatCard
           label="Amount due"
           value={formatMoney(balance, inv.currency)}
@@ -196,11 +226,45 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           )}
         </CardContent>
       </Card>
+
+      {credits.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Returns / credit notes</CardTitle></CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Credit note</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {credits.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-mono text-xs">{c.number}</TableCell>
+                    <TableCell>{formatDate(c.credit_date)}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.reason ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono">− {formatMoney(c.total, inv.currency)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <p className="text-xs text-muted-foreground mt-3">
+              Credits reduce the amount due. The invoice itself is unchanged — the customer&apos;s copy and the VAT already reported stay valid.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
+type CreditRow = { id: string; number: string; credit_date: string; total: number; reason: string | null; status: string };
+
 type LineRow = {
+  id: string;
   sequence: number;
   description: string;
   product?: { sku?: string; name?: string } | null;
