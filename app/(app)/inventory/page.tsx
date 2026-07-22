@@ -43,6 +43,25 @@ export default async function InventoryPage({
   const { data } = await supabase.rpc("stock_on_hand");
   const all = ((data as StockRow[] | null) ?? []).map((r) => ({ ...r, on_hand: Number(r.on_hand) }));
 
+  // Stock added today (via a Purchase Order receipt or a manual adjustment) —
+  // shown as a small note for that calendar day only; gone again tomorrow.
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const { data: stockLocs } = await supabase.from("location").select("id").eq("kind", "stock");
+  const stockLocIds = (stockLocs ?? []).map((l) => l.id);
+  const { data: todaysAdditions } = stockLocIds.length
+    ? await supabase
+        .from("stock_move")
+        .select("product_id, quantity")
+        .in("reference_type", ["purchase_order", "adjustment"])
+        .in("dest_location_id", stockLocIds)
+        .gte("created_at", todayStart.toISOString())
+    : { data: [] };
+  const addedTodayByProduct = new Map<string, number>();
+  for (const m of (todaysAdditions ?? []) as Array<{ product_id: string; quantity: number }>) {
+    addedTodayByProduct.set(m.product_id, (addedTodayByProduct.get(m.product_id) ?? 0) + Number(m.quantity));
+  }
+
   // Stats reflect the whole catalogue; the table below reflects the filters.
   const lowCount = all.filter((r) => stockStatus(r) === "low").length;
   const outCount = all.filter((r) => r.on_hand <= 0).length;
@@ -133,10 +152,18 @@ export default async function InventoryPage({
               const rp = r.reorder_point != null ? Number(r.reorder_point) : null;
               const status =
                 r.on_hand <= 0 ? "out" : rp != null && r.on_hand <= rp ? "low" : "ok";
+              const addedToday = addedTodayByProduct.get(r.product_id);
               return (
                 <TableRow key={r.product_id}>
                   <TableCell className="font-mono text-xs">{r.sku}</TableCell>
-                  <TableCell className="font-medium">{r.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div>{r.name}</div>
+                    {addedToday != null && (
+                      <div className="text-[11px] font-normal text-emerald-600">
+                        Stock added: +{addedToday.toFixed(0)} {r.uom ?? ""}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>{r.uom ?? "—"}</TableCell>
                   <TableCell className="text-right font-mono">{r.on_hand.toFixed(2)}</TableCell>
                   <TableCell className="text-right font-mono text-muted-foreground">{rp != null ? rp.toFixed(2) : "—"}</TableCell>
