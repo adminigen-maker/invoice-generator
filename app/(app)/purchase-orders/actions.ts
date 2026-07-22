@@ -149,7 +149,18 @@ export async function receivePurchaseOrder(id: string): Promise<Result> {
     const lines = (po.lines ?? []) as Array<{ id: string; product_id: string | null; uom_id: string | null; quantity: number; unit_price: number }>;
     const productLines = lines.filter((l) => l.product_id);
 
-    if (productLines.length) {
+    // Idempotency: if this PO already posted stock (e.g. a receive that ran the
+    // stock-move insert but failed on the old invalid 'received' status), never
+    // post it a second time — that would double the on-hand quantity.
+    const { data: existingMoves } = await supabase
+      .from("stock_move")
+      .select("id")
+      .eq("reference_type", "purchase_order")
+      .eq("reference_id", po.id)
+      .limit(1);
+    const alreadyPosted = (existingMoves?.length ?? 0) > 0;
+
+    if (productLines.length && !alreadyPosted) {
       const stockQ = supabase.from("location").select("id").eq("kind", "stock");
       if (po.warehouse_id) stockQ.eq("warehouse_id", po.warehouse_id);
       const [{ data: stockLoc }, { data: vendLoc }] = await Promise.all([
