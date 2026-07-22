@@ -122,10 +122,7 @@ export function QuotationForm({
   // Build the dropdown <option> lists ONCE. Without this, every keystroke in any
   // field re-created N products × rows option elements, the main typing lag.
   // React lets the same element array be reused across all the row selects.
-  const productOptions = useMemo(
-    () => products.map((p) => <option key={p.id} value={p.id}>{p.label}</option>),
-    [products]
-  );
+  const productComboOptions = useMemo(() => products.map((p) => ({ value: p.id, label: p.label })), [products]);
   const uomOptions = useMemo(
     () => uoms.map((u) => <option key={u.id} value={u.id}>{u.label}</option>),
     [uoms]
@@ -319,15 +316,16 @@ export function QuotationForm({
                 <tr key={l.key} className="border-t align-top">
                   <td className="p-1.5">
                     <div className="flex gap-1">
-                      <select
-                        value={l.product_id}
-                        onChange={(e) => pickProduct(i, e.target.value)}
-                        disabled={isReadOnly}
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                      >
-                        <option value="">—</option>
-                        {productOptions}
-                      </select>
+                      <div className="min-w-0 flex-1">
+                        <SearchableSelect
+                          value={l.product_id}
+                          onChange={(v) => pickProduct(i, v)}
+                          options={productComboOptions}
+                          placeholder="—"
+                          disabled={isReadOnly}
+                          triggerClassName="h-9 px-2"
+                        />
+                      </div>
                       {!isReadOnly && (
                         <Button
                           type="button"
