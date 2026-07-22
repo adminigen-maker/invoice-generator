@@ -138,12 +138,22 @@ export default async function ProductsPage({
                     {(() => {
                       const lpp = (p as { last_purchase_price?: number | null }).last_purchase_price;
                       const cost = (p as { cost_price?: number | null }).cost_price;
-                      if (!perms.has(P.inventory.productViewCost) || lpp == null || cost == null) return null;
-                      if (Math.abs(Number(lpp) - Number(cost)) <= 0.005) return null;
-                      const up = Number(lpp) > Number(cost);
+                      // Show a "Last buy" badge on any product that's been purchased;
+                      // turn it amber with an arrow only when the price differs from cost.
+                      if (!perms.has(P.inventory.productViewCost) || lpp == null) return null;
+                      const differs = cost != null && Math.abs(Number(lpp) - Number(cost)) > 0.005;
+                      const up = cost != null && Number(lpp) > Number(cost);
                       return (
-                        <Badge variant="warning" className="font-normal whitespace-nowrap" title={`Last purchased at ${formatMoney(Number(lpp))} vs master cost ${formatMoney(Number(cost))}`}>
-                          Last buy {formatMoney(Number(lpp))} {up ? "↑" : "↓"}
+                        <Badge
+                          variant={differs ? "warning" : "secondary"}
+                          className="font-normal whitespace-nowrap"
+                          title={
+                            differs
+                              ? `Last purchased at ${formatMoney(Number(lpp))} vs master cost ${formatMoney(Number(cost))}`
+                              : `Last purchased at ${formatMoney(Number(lpp))}`
+                          }
+                        >
+                          Last buy {formatMoney(Number(lpp))}{differs ? (up ? " ↑" : " ↓") : ""}
                         </Badge>
                       );
                     })()}
