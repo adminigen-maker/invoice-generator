@@ -70,7 +70,7 @@ export function PurchaseOrderForm({
 
   const prodMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const productComboOptions = useMemo(() => products.map((p) => ({ value: p.id, label: p.label })), [products]);
-  const uomOptions = useMemo(() => uoms.map((u) => <option key={u.id} value={u.id}>{u.label}</option>), [uoms]);
+  const uomComboOptions = useMemo(() => uoms.map((u) => ({ value: u.id, label: u.label })), [uoms]);
 
   // Editable until the goods are actually received (or it's cancelled/closed) —
   // a confirmed-but-not-yet-received PO can still be corrected.
@@ -198,8 +198,16 @@ export function PurchaseOrderForm({
                   <td className="p-1.5"><Input type="number" step="1" min="0" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
                   <td className="p-1.5">
                     <div className="flex gap-1">
-                      <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })} disabled={isReadOnly}
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"><option value="">—</option>{uomOptions}</select>
+                      <div className="min-w-0 flex-1">
+                        <SearchableSelect
+                          value={l.uom_id}
+                          onChange={(v) => updateLine(i, { uom_id: v })}
+                          options={uomComboOptions}
+                          placeholder="—"
+                          disabled={isReadOnly}
+                          triggerClassName="h-9 px-2"
+                        />
+                      </div>
                       {!isReadOnly && (
                         <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Add new unit" onClick={() => setUomAddLine(i)}><Plus className="h-4 w-4" /></Button>
                       )}

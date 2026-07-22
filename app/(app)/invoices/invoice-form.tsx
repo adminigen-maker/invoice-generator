@@ -70,8 +70,8 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
   const uomCodeById = useMemo(() => new Map(uoms.map((u) => [u.id, u.label])), [uoms]);
 
   const productComboOptions = useMemo(() => products.map((p) => ({ value: p.id, label: p.label })), [products]);
-  const uomOptions = useMemo(() => uoms.map((u) => <option key={u.id} value={u.id}>{u.label}</option>), [uoms]);
-  const taxOptions = useMemo(() => taxes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>), [taxes]);
+  const uomComboOptions = useMemo(() => uoms.map((u) => ({ value: u.id, label: u.label })), [uoms]);
+  const taxComboOptions = useMemo(() => taxes.map((t) => ({ value: t.id, label: t.label })), [taxes]);
 
   function updateLine(i: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -263,19 +263,14 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
                     <Input type="number" step="1" min="0" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} className="h-9 text-right" />
                   </td>
                   <td className="p-1.5">
-                    <select value={l.uom_id} onChange={(e) => updateLine(i, { uom_id: e.target.value })}
+                    <SearchableSelect
+                      value={l.uom_id}
+                      onChange={(v) => updateLine(i, { uom_id: v })}
+                      options={uomComboOptions}
+                      placeholder="—"
                       disabled={!!lockedUom}
-                      title={lockedUom ? "Unit is fixed by the selected product" : undefined}
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:opacity-70">
-                      {lockedUom ? (
-                        <option value={lockedUom}>{lockedUomCode || "—"}</option>
-                      ) : (
-                        <>
-                          <option value="">—</option>
-                          {uomOptions}
-                        </>
-                      )}
-                    </select>
+                      triggerClassName="h-9 px-2"
+                    />
                   </td>
                   <td className="p-1.5">
                     <Input type="number" step="0.01" value={l.unit_price} onChange={(e) => updateLine(i, { unit_price: e.target.value })} className="h-9 text-right" />
@@ -284,10 +279,13 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
                     <Input type="number" step="0.01" value={l.discount_pct} onChange={(e) => updateLine(i, { discount_pct: e.target.value })} className="h-9 text-right" />
                   </td>
                   <td className="p-1.5">
-                    <select value={l.tax_id} onChange={(e) => updateLine(i, { tax_id: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
-                      <option value="">—</option>
-                      {taxOptions}
-                    </select>
+                    <SearchableSelect
+                      value={l.tax_id}
+                      onChange={(v) => updateLine(i, { tax_id: v })}
+                      options={taxComboOptions}
+                      placeholder="—"
+                      triggerClassName="h-9 px-2"
+                    />
                   </td>
                   <td className="p-1.5 text-right font-mono">{formatMoney(linetotal.line_total, currency)}</td>
                   <td className="p-1.5">
