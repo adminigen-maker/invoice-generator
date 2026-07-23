@@ -3626,3 +3626,9 @@ create index if not exists idx_purchase_order_line_product_id   on public.purcha
 create index if not exists idx_purchase_order_line_tax_id       on public.purchase_order_line(tax_id);
 create index if not exists idx_purchase_order_line_uom_id       on public.purchase_order_line(uom_id);
 drop index if exists public.idx_credit_note_invoice_id;
+
+-- ## SOURCE: db/migrations/0051_lock_internal_recompute_helpers.sql
+-- Internal recompute helpers are owner-only (called via SECURITY DEFINER
+-- triggers rollup_invoice_paid / trg_credit_note_rollup); no external role needs them.
+revoke execute on function public.recompute_invoice_status(uuid) from authenticated;
+revoke execute on function public.rollup_invoice_credited(uuid)  from authenticated;
