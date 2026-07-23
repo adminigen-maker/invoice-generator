@@ -8,8 +8,10 @@ import { P } from "@/lib/rbac/permissions";
 
 const seqSchema = z.object({
   id: z.string().uuid(),
-  prefix: z.string().trim().min(1, "Prefix required").max(12),
-  format: z.string().trim().min(1, "Format required").max(40),
+  prefix: z.string().trim().min(1, "Prefix required").max(12)
+    .regex(/^[A-Za-z0-9\-_/]+$/, "Prefix may use letters, digits, dash, underscore and slash only"),
+  format: z.string().trim().min(1, "Format required").max(40)
+    .regex(/^[A-Za-z0-9\-_/{}]+$/, "Format may use letters, digits, dash, underscore, slash and { } tokens only"),
   padding: z.coerce.number().int().min(1, "Padding must be ≥ 1").max(12),
   next_number: z.coerce.number().int().min(1, "Next number must be ≥ 1"),
   reset_yearly: z.coerce.boolean(),

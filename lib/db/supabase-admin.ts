@@ -1,3 +1,4 @@
+import "server-only"; // build fails if this service-role module is ever imported client-side
 import { createClient } from "@supabase/supabase-js";
 import { cleanEnv } from "./clean-env";
 import { supabaseUrl } from "./config";

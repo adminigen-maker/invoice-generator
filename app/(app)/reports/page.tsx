@@ -43,8 +43,10 @@ const marginPct = (revenue: number, profit: number) => (Number(revenue) ? (Numbe
 
 function toCsv(r: Reports, vat: Vat | null, profit: Profit | null, valuation: Valuation | null, from?: string, to?: string): string {
   const esc = (v: unknown) => {
-    const s = String(v ?? "");
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    let s = String(v ?? "");
+    // Neutralize spreadsheet formula injection (leading = + - @ / control char).
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines: string[] = [];
   lines.push(`Invoice UAE — Report`);

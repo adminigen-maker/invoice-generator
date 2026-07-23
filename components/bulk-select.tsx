@@ -117,8 +117,11 @@ export function BulkBar({
     if (!rows.length) return;
     const cols = Object.keys(rows[0]).filter((c) => c !== "id");
     const esc = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      let s = v == null ? "" : String(v);
+      // Neutralize spreadsheet formula injection: a cell beginning with = + - @
+      // (or a control char) can execute when opened in Excel/Sheets. Prefix ' .
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });

@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/db/supabase-server";
 import { createAdminClient } from "@/lib/db/supabase-admin";
-import { requirePermission } from "@/lib/rbac/can";
+import { requirePermission, getPermissions } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 
 type Result = { ok: boolean; error?: string };
+
+// Data scope is a fixed enum that drives RLS row-visibility — never trust a raw string.
+const scopeSchema = z.enum(["all", "team", "branch", "own"]);
 
 /** Grant or revoke a single permission for a role. */
 export async function toggleRolePermission(
@@ -19,6 +22,17 @@ export async function toggleRolePermission(
     await requirePermission(P.admin.rolesEdit);
     const supabase = await createClient();
     if (grant) {
+      // Separation of duties: you may only GRANT a permission you already hold
+      // yourself. Without this, a holder of admin.roles.edit could grant admin.*
+      // to a role they hold and silently escalate to full admin. (Revoking is
+      // always allowed — it can't escalate.)
+      const { data: perm } = await supabase
+        .from("app_permission").select("code").eq("id", permissionId).maybeSingle();
+      if (!perm) return { ok: false, error: "That permission no longer exists." };
+      const mine = await getPermissions();
+      if (!mine.has(perm.code)) {
+        return { ok: false, error: `You can't grant "${perm.code}" — you don't hold that permission yourself.` };
+      }
       const { error } = await supabase
         .from("role_permission")
         .upsert({ role_id: roleId, permission_id: permissionId }, { onConflict: "role_id,permission_id" });
@@ -47,11 +61,12 @@ export async function toggleUserRole(
 ): Promise<Result> {
   try {
     await requirePermission(P.admin.usersEdit);
+    const safeScope = scopeSchema.parse(scope);
     const supabase = await createClient();
     if (assign) {
       const { error } = await supabase
         .from("user_role")
-        .upsert({ user_id: userId, role_id: roleId, scope }, { onConflict: "user_id,role_id" });
+        .upsert({ user_id: userId, role_id: roleId, scope: safeScope }, { onConflict: "user_id,role_id" });
       if (error) return { ok: false, error: error.message };
     } else {
       const { error } = await supabase
@@ -72,8 +87,9 @@ export async function toggleUserRole(
 export async function setUserScope(userId: string, scope: string): Promise<Result> {
   try {
     await requirePermission(P.admin.usersEdit);
+    const safeScope = scopeSchema.parse(scope);
     const supabase = await createClient();
-    const { error } = await supabase.from("user_role").update({ scope }).eq("user_id", userId);
+    const { error } = await supabase.from("user_role").update({ scope: safeScope }).eq("user_id", userId);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/settings/roles");
     return { ok: true };

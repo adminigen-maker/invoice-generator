@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/api") || // API routes handle their own auth (e.g. cron keep-alive)
+    pathname === "/api/keep-alive" || // ONLY this cron route is public (self-checks CRON_SECRET); other /api routes require auth
     pathname.startsWith("/_next") ||
     // Static assets (favicons, images) load without a session, e.g. on /login.
     /\.(png|jpe?g|gif|webp|svg|ico|txt|xml)$/.test(pathname);
