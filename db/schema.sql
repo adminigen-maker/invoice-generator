@@ -3530,3 +3530,20 @@ end $fn$;
 
 revoke execute on function public.dashboard_operational(uuid) from anon;
 grant execute on function public.dashboard_operational(uuid) to authenticated;
+
+-- ## SOURCE: db/migrations/0049_revoke_anon_execute_on_rpcs.sql
+-- Security: drop PUBLIC/anon EXECUTE on SECURITY DEFINER + sequence RPCs.
+-- A prior `revoke ... from anon` (0048) was a no-op because CREATE FUNCTION grants
+-- EXECUTE to PUBLIC by default, and PUBLIC includes anon — so you must revoke from
+-- PUBLIC. Confirmed leak: dashboard_operational(null) as anon returned live
+-- financials. App calls these only as `authenticated`; triggers run as owner.
+revoke execute on function public.dashboard_operational(uuid)       from public, anon;
+revoke execute on function public.customer_last_price(uuid, uuid)   from public, anon;
+revoke execute on function public.profit_report(date, date, uuid)   from public, anon;
+revoke execute on function public.reports_summary(date, date, uuid) from public, anon;
+revoke execute on function public.vat_report(date, date, uuid)      from public, anon;
+revoke execute on function public.next_document_number(text)        from public, anon;
+revoke execute on function public.recompute_invoice_status(uuid)    from public, anon;
+revoke execute on function public.rollup_invoice_credited(uuid)     from public, anon;
+revoke execute on function public.post_invoice_stock_moves()        from public, anon, authenticated;
+revoke execute on function public.trg_credit_note_rollup()          from public, anon, authenticated;
