@@ -5,6 +5,7 @@ import { P } from "@/lib/rbac/permissions";
 import { formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
+import { PdfButton } from "@/components/pdf-button";
 import { PurchaseOrderForm } from "../po-form";
 import { PoActions } from "./po-actions";
 
@@ -49,13 +50,16 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             {po.status === "cancelled" && "Cancelled."}
           </p>
         </div>
-        <PoActions
-          id={po.id}
-          status={po.status}
-          canConfirm={perms.has(P.procurement.poConfirm)}
-          canReceive={perms.has(P.procurement.poReceive)}
-          canCancel={perms.has(P.procurement.poCancel)}
-        />
+        <div className="flex flex-wrap gap-2">
+          <PdfButton url={`/purchase-orders/${po.id}/pdf`} filename={`${po.number}.pdf`} />
+          <PoActions
+            id={po.id}
+            status={po.status}
+            canConfirm={perms.has(P.procurement.poConfirm)}
+            canReceive={perms.has(P.procurement.poReceive)}
+            canCancel={perms.has(P.procurement.poCancel)}
+          />
+        </div>
       </div>
 
       <Card>
