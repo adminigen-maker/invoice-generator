@@ -18,13 +18,14 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
       .select("*, vendor:vendor(name), lines:purchase_order_line(product_id, description, quantity, uom_id, unit_price, discount_pct, tax_pct, sequence)")
       .eq("id", id).maybeSingle(),
     supabase.from("vendor").select("id, code, name").order("name"),
-    supabase.from("product").select("id, sku, name, cost_price, uom_id").order("name"),
+    supabase.from("product").select("id, sku, name, cost_price, uom_id, tax_id").order("name"),
     supabase.from("unit_of_measure").select("id, code").order("code"),
     supabase.from("warehouse").select("id, code, name").order("code"),
     supabase.from("tax_rate").select("id, code, rate").order("code"),
   ]);
 
   if (!po) return notFound();
+  const taxRateById = new Map((taxes ?? []).map((t) => [t.id, Number(t.rate)]));
   type PoLine = { sequence: number; product_id: string | null; description: string; quantity: number; uom_id: string | null; unit_price: number; discount_pct: number; tax_pct: number };
   const lines = ((po.lines ?? []) as PoLine[]).slice().sort((a, b) => a.sequence - b.sequence);
   const vendorName = (po.vendor as { name?: string } | null)?.name ?? (po.vendor_name as string | null) ?? "—";
@@ -72,7 +73,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               lines,
             }}
             vendors={(vendors ?? []).map((v) => ({ id: v.id, label: `${v.code} — ${v.name}` }))}
-            products={(products ?? []).map((p) => ({ id: p.id, label: `${p.sku} — ${p.name}`, extra: { cost_price: p.cost_price, uom_id: p.uom_id } }))}
+            products={(products ?? []).map((p) => ({ id: p.id, label: `${p.sku} — ${p.name}`, extra: { cost_price: p.cost_price, uom_id: p.uom_id, tax_rate: p.tax_id ? taxRateById.get(p.tax_id) ?? 0 : 0 } }))}
             uoms={(uoms ?? []).map((u) => ({ id: u.id, label: u.code }))}
             warehouses={(warehouses ?? []).map((w) => ({ id: w.id, label: `${w.code} — ${w.name}` }))}
             taxes={(taxes ?? []).map((t) => ({ id: t.id, label: `${t.code} (${Number(t.rate).toFixed(2)}%)` }))}

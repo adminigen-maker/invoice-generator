@@ -86,6 +86,7 @@ export function PurchaseOrderForm({
       description: p?.label.split(" — ").slice(1).join(" — ") || p?.label || "",
       unit_price: String(p?.extra?.cost_price ?? "0"),
       uom_id: (p?.extra?.uom_id as string) ?? "",
+      tax_pct: String(p?.extra?.tax_rate ?? "0"),
     });
   }
 
