@@ -27,8 +27,11 @@ const nextConfig: NextConfig = {
   // safe for the current app (Supabase XHR, Recharts inline styles, PDFs).
   async headers() {
     const securityHeaders = [
-      { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
-      { key: "X-Frame-Options", value: "DENY" },
+      // 'self' / SAMEORIGIN — NOT 'none'/DENY: the PDF preview in <PdfButton>
+      // embeds our own /…/pdf routes in a same-origin iframe, and DENY blocks
+      // that too. This still stops any external site from framing the app.
+      { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+      { key: "X-Frame-Options", value: "SAMEORIGIN" },
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
