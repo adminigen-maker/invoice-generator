@@ -21,6 +21,7 @@ type Line = { key: string; product_id: string; description: string; quantity: st
 
 export type POInitial = {
   id: string;
+  number: string;
   vendor_id: string;
   order_date: string;
   expected_date: string | null;
@@ -51,6 +52,7 @@ export function PurchaseOrderForm({
   const [productAddLine, setProductAddLine] = useState<number | null>(null);
   const [uomAddLine, setUomAddLine] = useState<number | null>(null);
 
+  const [number, setNumber] = useState(initial?.number ?? "");
   const [vendorId, setVendorId] = useState(initial?.vendor_id ?? "");
   const [orderDate, setOrderDate] = useState(initial?.order_date ?? new Date().toISOString().slice(0, 10));
   const [expectedDate, setExpectedDate] = useState(initial?.expected_date ?? "");
@@ -96,12 +98,17 @@ export function PurchaseOrderForm({
   );
 
   function onSave() {
+    if (!number.trim()) {
+      toast.error("Enter a purchase order number");
+      return;
+    }
     if (!vendorId) {
       toast.error("Select a vendor");
       return;
     }
     startTx(async () => {
       const res = await savePurchaseOrder(initial?.id ?? null, {
+        number: number.trim(),
         vendor_id: vendorId,
         order_date: orderDate,
         expected_date: expectedDate || null,
@@ -123,6 +130,10 @@ export function PurchaseOrderForm({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="space-y-1.5">
+          <Label>PO number <span className="text-destructive">*</span></Label>
+          <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g. PO-2026-001" disabled={isReadOnly} required />
+        </div>
         <div className="space-y-1.5 md:col-span-2">
           <Label>Vendor <span className="text-destructive">*</span></Label>
           <div className="flex gap-2">

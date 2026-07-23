@@ -63,6 +63,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           <PurchaseOrderForm
             initial={{
               id: po.id,
+              number: po.number,
               vendor_id: po.vendor_id ?? "",
               order_date: po.order_date,
               expected_date: po.expected_date,

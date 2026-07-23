@@ -18,6 +18,7 @@ const lineSchema = z.object({
 });
 
 const poSchema = z.object({
+  number: z.string().trim().min(1, "Purchase order number is required"),
   vendor_id: z.string().uuid("Vendor required"),
   order_date: z.string().min(1),
   expected_date: z.string().optional().nullable(),
@@ -29,12 +30,6 @@ const poSchema = z.object({
 
 type SaveResult = { ok: true; id: string } | { ok: false; error: string };
 type Result = { ok: boolean; error?: string };
-
-async function nextNumber() {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("next_document_number", { seq_code: "purchase_order" });
-  return data as string;
-}
 
 async function saveLines(poId: string, lines: z.infer<typeof lineSchema>[]) {
   const supabase = await createClient();
@@ -77,6 +72,7 @@ export async function savePurchaseOrder(existingId: string | null, input: z.infe
 
     let id = existingId;
     const header = {
+      number: parsed.number,
       vendor_id: parsed.vendor_id,
       warehouse_id: parsed.warehouse_id || null,
       order_date: parsed.order_date,
@@ -90,17 +86,16 @@ export async function savePurchaseOrder(existingId: string | null, input: z.infe
     };
 
     if (!id) {
-      const number = await nextNumber();
       const { data: user } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("purchase_order")
-        .insert({ ...header, number, status: "draft", created_by: user.user?.id })
+        .insert({ ...header, status: "draft", created_by: user.user?.id })
         .select("id").single();
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: dupError(error.message, parsed.number) };
       id = data.id;
     } else {
       const { error } = await supabase.from("purchase_order").update(header).eq("id", id);
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: dupError(error.message, parsed.number) };
     }
 
     await saveLines(id!, parsed.lines);
@@ -249,6 +244,12 @@ export async function deletePurchaseOrder(id: string): Promise<Result> {
   } catch (e) {
     return { ok: false, error: err(e, "delete purchase orders") };
   }
+}
+
+function dupError(msg: string, number: string): string {
+  return /duplicate|unique/i.test(msg)
+    ? `Purchase order number “${number}” already exists — use a different one.`
+    : msg;
 }
 
 function err(e: unknown, action: string): string {

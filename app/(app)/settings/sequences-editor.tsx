@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { previewDocumentNumber } from "@/lib/document-number";
 import { updateSequence } from "./actions";
 
 export type Sequence = {
@@ -17,18 +18,6 @@ export type Sequence = {
   next_number: number;
   reset_yearly: boolean;
 };
-
-/** Render the next number the way the DB's next_document_number() would. */
-function previewNumber(prefix: string, format: string, padding: number, next: number): string {
-  const now = new Date();
-  const pad = Math.max(1, Number(padding) || 1);
-  const seq = Math.max(1, Number(next) || 1);
-  return (format || "")
-    .split("{PREFIX}").join(prefix || "")
-    .split("{YYYY}").join(String(now.getFullYear()))
-    .split("{MM}").join(String(now.getMonth() + 1).padStart(2, "0"))
-    .split("{SEQ}").join(String(seq).padStart(pad, "0"));
-}
 
 export function SequencesEditor({ sequences, canEdit }: { sequences: Sequence[]; canEdit: boolean }) {
   return (
@@ -142,7 +131,7 @@ function SequenceRow({ seq, canEdit }: { seq: Sequence; canEdit: boolean }) {
         />
       </td>
       <td className="py-2 pr-3 font-mono text-xs whitespace-nowrap">
-        {previewNumber(prefix, format, Number(padding), Number(nextNumber))}
+        {previewDocumentNumber(prefix, format, Number(padding), Number(nextNumber))}
       </td>
       {canEdit && (
         <td className="py-2">
