@@ -20,6 +20,7 @@ const invoiceLineSchema = z.object({
 });
 
 const invoiceSchema = z.object({
+  number: z.string().trim().min(1, "Invoice number is required"),
   customer_id: z.string().uuid("Customer required"),
   invoice_date: z.string().min(1),
   due_date: z.string().optional().nullable(),
@@ -58,13 +59,12 @@ export async function createInvoice(
       }))
     );
 
-    const { data: numData } = await supabase.rpc("next_document_number", { seq_code: "invoice" });
     const { data: user } = await supabase.auth.getUser();
 
     const { data: inv, error: invErr } = await supabase
       .from("invoice")
       .insert({
-        number: numData as string,
+        number: parsed.number,
         customer_id: parsed.customer_id,
         invoice_date: parsed.invoice_date,
         due_date: parsed.due_date || null,
@@ -80,7 +80,14 @@ export async function createInvoice(
       })
       .select("id")
       .single();
-    if (invErr) return { ok: false, error: invErr.message };
+    if (invErr) {
+      return {
+        ok: false,
+        error: /duplicate|unique/i.test(invErr.message)
+          ? `Invoice number “${parsed.number}” already exists — use a different one.`
+          : invErr.message,
+      };
+    }
 
     const rows = parsed.lines.map((l, i) => {
       const t = computeLine({

@@ -57,6 +57,7 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
   const [customerAddOpen, setCustomerAddOpen] = useState(false);
   const [productAddLine, setProductAddLine] = useState<number | null>(null);
 
+  const [number, setNumber] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
@@ -134,6 +135,10 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
       toast.error("Select a customer");
       return;
     }
+    if (!number.trim()) {
+      toast.error("Enter an invoice number");
+      return;
+    }
     const over = overStockLines();
     if (over.length) {
       toast.error(`Not enough stock on ${over.length} line${over.length > 1 ? "s" : ""} — reduce the quantity or restock first.`);
@@ -141,6 +146,7 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
     }
     startTx(async () => {
       const res = await createInvoice({
+        number: number.trim(),
         customer_id: customerId,
         invoice_date: invoiceDate,
         due_date: dueDate || null,
@@ -169,8 +175,12 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="space-y-1.5 md:col-span-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label>Invoice number <span className="text-destructive">*</span></Label>
+          <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g. INV-2026-001" required />
+        </div>
+        <div className="space-y-1.5">
           <Label>Customer <span className="text-destructive">*</span></Label>
           <div className="flex gap-2">
             <div className="flex-1 min-w-0">
