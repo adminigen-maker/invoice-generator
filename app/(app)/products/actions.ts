@@ -126,6 +126,10 @@ export async function createProduct(fd: FormData): Promise<FormResult> {
     await requirePermission(P.inventory.productCreate);
     const input = parseForm(fd);
     const extraUoms = parseExtraUoms(fd, input.uom_id); // validate before any write
+    const canCost = await can(P.inventory.productViewCost);
+    // A user who can't see cost must not set the base cost either — fall back to
+    // the DB default (0) rather than trust a crafted cost_price in the payload.
+    if (!canCost) delete (input as Record<string, unknown>).cost_price;
     const supabase = await createClient();
     if (!input.sku) input.sku = await nextSku(supabase);
     const { data: user } = await supabase.auth.getUser();
@@ -136,7 +140,7 @@ export async function createProduct(fd: FormData): Promise<FormResult> {
       .single();
     if (error) return { ok: false, error: error.message };
     try {
-      await saveProductUoms(supabase, data.id, extraUoms, await can(P.inventory.productViewCost));
+      await saveProductUoms(supabase, data.id, extraUoms, canCost);
     } catch (e) {
       // The product committed before its units; if the units fail, remove the
       // orphan so a retry doesn't create a duplicate (best effort — needs delete rights).
