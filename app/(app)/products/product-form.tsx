@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,16 @@ import { QuickAddCategory } from "@/components/quick-add/quick-add-category";
 import { createProduct, updateProduct } from "./actions";
 
 type Option = { id: string; label: string };
+
+export type ProductUomValue = {
+  uom_id: string;
+  factor: number | string;
+  sale_price: number | string;
+  cost_price: number | string;
+};
+
+// Editable row in the "Additional units & prices" table (client state).
+type UomRow = { key: string; uom_id: string; factor: string; sale_price: string; cost_price: string };
 
 export type ProductFormValues = {
   id?: string;
@@ -27,6 +37,7 @@ export type ProductFormValues = {
   reorder_point?: number | string | null;
   is_stockable?: boolean | null;
   is_active?: boolean | null;
+  extraUoms?: ProductUomValue[];
 };
 
 type Props = {
@@ -47,10 +58,38 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
   const [taxId, setTaxId] = useState(initial?.tax_id ?? "");
   const [catOpen, setCatOpen] = useState(false);
 
+  const [extraUoms, setExtraUoms] = useState<UomRow[]>(
+    (initial?.extraUoms ?? []).map((r) => ({
+      key: crypto.randomUUID(),
+      uom_id: r.uom_id,
+      factor: String(r.factor ?? "1"),
+      sale_price: String(r.sale_price ?? "0"),
+      cost_price: String(r.cost_price ?? "0"),
+    }))
+  );
+  const addUom = () =>
+    setExtraUoms((p) => [...p, { key: crypto.randomUUID(), uom_id: "", factor: "1", sale_price: "0", cost_price: "0" }]);
+  const removeUom = (key: string) => setExtraUoms((p) => p.filter((r) => r.key !== key));
+  const updateUom = (key: string, patch: Partial<UomRow>) =>
+    setExtraUoms((p) => p.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  // A product's extra units can't reuse its base unit.
+  const uomOptionsForRows = uoms.filter((u) => u.id !== uomId).map((u) => ({ value: u.id, label: u.label }));
+  const gridCols = canViewCost
+    ? "md:grid-cols-[minmax(0,1fr)_110px_120px_120px_40px]"
+    : "md:grid-cols-[minmax(0,1fr)_110px_120px_40px]";
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
     const fd = new FormData(e.currentTarget);
+    fd.set(
+      "extra_uoms",
+      JSON.stringify(
+        extraUoms
+          .filter((r) => r.uom_id)
+          .map((r) => ({ uom_id: r.uom_id, factor: r.factor, sale_price: r.sale_price, cost_price: r.cost_price }))
+      )
+    );
     const res = isEdit ? await updateProduct(initial!.id!, fd) : await createProduct(fd);
     if (!res.ok) {
       setSaving(false);
@@ -143,6 +182,57 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
         <input type="checkbox" name="is_active" defaultChecked={initial?.is_active ?? true} />
         Active
       </label>
+
+      <div className="md:col-span-2 space-y-2 border-t pt-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Label>Additional units &amp; prices</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Sell this product in bigger units too. <span className="font-medium">Base units</span> = how many of the
+              base unit make one of this unit (e.g. 1 Box = 12). The price above is the base‑unit price.
+            </p>
+          </div>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={addUom}>
+            <Plus className="h-4 w-4 mr-1" />Add unit
+          </Button>
+        </div>
+
+        {extraUoms.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <div className={`hidden md:grid ${gridCols} gap-2 px-1 text-xs text-muted-foreground`}>
+              <span>Unit</span>
+              <span>Base units</span>
+              <span>Sale price</span>
+              {canViewCost && <span>Cost price</span>}
+              <span />
+            </div>
+            {extraUoms.map((row) => (
+              <div key={row.key} className={`grid grid-cols-2 ${gridCols} gap-2 items-center`}>
+                <div className="col-span-2 md:col-span-1">
+                  <SearchableSelect
+                    value={row.uom_id}
+                    onChange={(v) => updateUom(row.key, { uom_id: v })}
+                    options={uomOptionsForRows}
+                    placeholder="— unit —"
+                  />
+                </div>
+                <Input type="number" step="0.000001" min="0" value={row.factor}
+                  onChange={(e) => updateUom(row.key, { factor: e.target.value })} placeholder="12" aria-label="Base units" />
+                <Input type="number" step="0.01" min="0" value={row.sale_price}
+                  onChange={(e) => updateUom(row.key, { sale_price: e.target.value })} aria-label="Sale price" />
+                {canViewCost && (
+                  <Input type="number" step="0.01" min="0" value={row.cost_price}
+                    onChange={(e) => updateUom(row.key, { cost_price: e.target.value })} aria-label="Cost price" />
+                )}
+                <Button type="button" variant="ghost" size="icon" className="shrink-0"
+                  onClick={() => removeUom(row.key)} title="Remove unit">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="md:col-span-2 flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={pending}>

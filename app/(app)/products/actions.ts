@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/db/supabase-server";
-import { requirePermission } from "@/lib/rbac/can";
+import { requirePermission, can } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 
 const productSchema = z.object({
@@ -22,6 +22,86 @@ const productSchema = z.object({
 });
 
 type FormResult = { ok: true; id: string } | { ok: false; error: string };
+
+// Extra selling units for a product (Box, Carton, …). The BASE unit lives on the
+// product itself (uom_id / sale_price / cost_price, implicit factor 1); these are
+// additional units, each with how many base units it equals and its own price.
+const productUomRowSchema = z.object({
+  uom_id: z.string().uuid(),
+  // Bounded so a value can't overflow numeric(18,6)/(18,4) at INSERT time (which
+  // would fail mid-save); rejected up front with a friendly message instead.
+  factor: z.coerce.number().positive("Base-unit quantity must be greater than 0").max(1_000_000, "Base-unit quantity is too large"),
+  sale_price: z.coerce.number().min(0).max(1_000_000_000, "Price is too large").default(0),
+  cost_price: z.coerce.number().min(0).max(1_000_000_000, "Price is too large").default(0),
+});
+type ProductUomRow = z.infer<typeof productUomRowSchema>;
+
+/** Read + validate the JSON `extra_uoms` field. Throws (caught → friendly error). */
+function parseExtraUoms(fd: FormData, baseUomId: string): ProductUomRow[] {
+  const raw = fd.get("extra_uoms");
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  let arr: unknown;
+  try {
+    arr = JSON.parse(raw);
+  } catch {
+    throw new Error("Additional units are malformed.");
+  }
+  // Non-array but valid JSON ("null", "{}", …) must NOT be treated as an
+  // intentional clear-all — fail closed rather than silently deleting all units.
+  if (!Array.isArray(arr)) throw new Error("Additional units are malformed.");
+  const rows = arr
+    .filter((r) => r && typeof r === "object" && (r as { uom_id?: string }).uom_id) // drop blank rows
+    .map((r) => productUomRowSchema.parse(r));
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (r.uom_id === baseUomId) throw new Error("An additional unit can't be the same as the base unit.");
+    if (seen.has(r.uom_id)) throw new Error("Each additional unit can only be listed once.");
+    seen.add(r.uom_id);
+  }
+  return rows;
+}
+
+/**
+ * Reconcile a product's extra units to `rows`. Upsert the desired rows FIRST,
+ * then delete only the units no longer present — so if the write fails, the
+ * existing units survive (a delete-then-insert would wipe them all on any insert
+ * error). When the caller can't view cost, each existing unit's cost_price is
+ * preserved instead of writing the 0 the client sent (it never had the real one),
+ * so editing sale prices as a non-cost user can't silently wipe costs.
+ */
+async function saveProductUoms(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  productId: string,
+  rows: ProductUomRow[],
+  canWriteCost: boolean,
+) {
+  let costByUom = new Map<string, number>();
+  if (!canWriteCost) {
+    const { data: existing } = await supabase
+      .from("product_uom").select("uom_id, cost_price").eq("product_id", productId);
+    costByUom = new Map((existing ?? []).map((r) => [r.uom_id as string, Number(r.cost_price)]));
+  }
+  if (rows.length) {
+    const { error: upErr } = await supabase.from("product_uom").upsert(
+      rows.map((r, i) => ({
+        product_id: productId,
+        uom_id: r.uom_id,
+        factor: r.factor,
+        sale_price: r.sale_price,
+        cost_price: canWriteCost ? r.cost_price : costByUom.get(r.uom_id) ?? 0,
+        sequence: i,
+      })),
+      { onConflict: "product_id,uom_id" },
+    );
+    if (upErr) throw new Error(upErr.message);
+  }
+  // Drop units the user removed (all of them when `rows` is empty).
+  const keep = rows.map((r) => r.uom_id);
+  let del = supabase.from("product_uom").delete().eq("product_id", productId);
+  if (keep.length) del = del.not("uom_id", "in", `(${keep.join(",")})`);
+  const { error: delErr } = await del;
+  if (delErr) throw new Error(delErr.message);
+}
 
 /** Draw the next SKU from the `product` numbering sequence (e.g. SKU-00001). */
 async function nextSku(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
@@ -45,6 +125,7 @@ export async function createProduct(fd: FormData): Promise<FormResult> {
   try {
     await requirePermission(P.inventory.productCreate);
     const input = parseForm(fd);
+    const extraUoms = parseExtraUoms(fd, input.uom_id); // validate before any write
     const supabase = await createClient();
     if (!input.sku) input.sku = await nextSku(supabase);
     const { data: user } = await supabase.auth.getUser();
@@ -54,7 +135,16 @@ export async function createProduct(fd: FormData): Promise<FormResult> {
       .select("id")
       .single();
     if (error) return { ok: false, error: error.message };
+    try {
+      await saveProductUoms(supabase, data.id, extraUoms, await can(P.inventory.productViewCost));
+    } catch (e) {
+      // The product committed before its units; if the units fail, remove the
+      // orphan so a retry doesn't create a duplicate (best effort — needs delete rights).
+      await supabase.from("product").delete().eq("id", data.id);
+      throw e;
+    }
     revalidatePath("/products");
+    revalidatePath(`/products/${data.id}`);
     return { ok: true, id: data.id };
   } catch (e) {
     return { ok: false, error: actionError(e, "create products") };
@@ -65,12 +155,18 @@ export async function updateProduct(id: string, fd: FormData): Promise<FormResul
   try {
     await requirePermission(P.inventory.productEdit);
     const input = parseForm(fd);
+    const extraUoms = parseExtraUoms(fd, input.uom_id); // validate before any write
+    const canCost = await can(P.inventory.productViewCost);
     const supabase = await createClient();
     // Never blank out an existing SKU on edit.
     const patch = { ...input };
     if (!patch.sku) delete patch.sku;
+    // A user who can't see cost never submits it — parseForm defaults the missing
+    // field to 0, which must not overwrite the real master cost.
+    if (!canCost) delete (patch as Record<string, unknown>).cost_price;
     const { error } = await supabase.from("product").update(patch).eq("id", id);
     if (error) return { ok: false, error: error.message };
+    await saveProductUoms(supabase, id, extraUoms, canCost);
     revalidatePath("/products");
     revalidatePath(`/products/${id}`);
     return { ok: true, id };
