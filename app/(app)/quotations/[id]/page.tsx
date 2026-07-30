@@ -3,6 +3,7 @@ import { createClient } from "@/lib/db/supabase-server";
 import { can } from "@/lib/rbac/can";
 import { P } from "@/lib/rbac/permissions";
 import { QuotationForm } from "../quotation-form";
+import { buildProductUnits } from "@/lib/product-units";
 import { StatusBadge } from "@/components/status-badge";
 import { PdfButton } from "@/components/pdf-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,9 +19,10 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
     { data: uoms },
     { data: taxes },
     { data: stock },
+    { data: productUoms },
   ] = await Promise.all([
     supabase.from("quotation")
-      .select("*, lines:quotation_line(product_id, description, quantity, uom_id, unit_price, discount_pct, tax_id, sequence)")
+      .select("*, lines:quotation_line(product_id, description, quantity, uom_id, uom_factor, unit_price, discount_pct, tax_id, sequence)")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("customer").select("id, code, name").order("name"),
@@ -28,8 +30,11 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
     supabase.from("unit_of_measure").select("id, code").order("code"),
     supabase.from("tax_rate").select("id, code, name, rate").order("code"),
     supabase.rpc("stock_on_hand"),
+    supabase.from("product_uom").select("product_id, uom_id, factor, sale_price, sequence").eq("is_active", true).order("sequence"),
   ]);
   const stockMap = new Map(((stock as { product_id: string; on_hand: number }[] | null) ?? []).map((s) => [s.product_id, Number(s.on_hand)]));
+  const uomCode = new Map((uoms ?? []).map((u) => [u.id, u.code]));
+  const unitsByProduct = buildProductUnits((products ?? []) as { id: string; uom_id: string; sale_price: number }[], productUoms ?? [], uomCode);
 
   if (!quotation) return notFound();
   const lines = (quotation.lines ?? []).sort(
@@ -69,6 +74,7 @@ export default async function ViewQuotationPage({ params }: { params: Promise<{ 
               id: p.id,
               label: `${p.sku} — ${p.name}`,
               extra: { sale_price: p.sale_price, uom_id: p.uom_id, tax_id: p.tax_id, stock: stockMap.get(p.id) ?? null },
+              uoms: unitsByProduct.get(p.id) ?? [],
             }))}
             uoms={(uoms ?? []).map((u) => ({ id: u.id, label: u.code }))}
             taxes={(taxes ?? []).map((t) => ({ id: t.id, label: `${t.code} (${Number(t.rate).toFixed(2)}%)`, extra: { rate: t.rate } }))}

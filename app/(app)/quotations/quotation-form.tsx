@@ -16,13 +16,15 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { QuickAddCustomer } from "@/components/quick-add/quick-add-customer";
 import { QuickAddProduct } from "@/components/quick-add/quick-add-product";
 
-type Opt = { id: string; label: string; extra?: Record<string, string | number | null> };
+type ProductUnit = { uom_id: string; factor: number; sale_price: number; label: string };
+type Opt = { id: string; label: string; extra?: Record<string, string | number | null>; uoms?: ProductUnit[] };
 type Line = {
   key: string;
   product_id: string;
   description: string;
   quantity: string;
   uom_id: string;
+  uom_factor: string;
   unit_price: string;
   discount_pct: string;
   tax_id: string;
@@ -42,6 +44,7 @@ export type QuotationInitial = {
     description: string;
     quantity: number | string;
     uom_id: string | null;
+    uom_factor?: number | string | null;
     unit_price: number | string;
     discount_pct: number | string;
     tax_id: string | null;
@@ -63,6 +66,7 @@ const emptyLine = (): Line => ({
   description: "",
   quantity: "1",
   uom_id: "",
+  uom_factor: "1",
   unit_price: "0",
   discount_pct: "0",
   tax_id: "",
@@ -108,6 +112,7 @@ export function QuotationForm({
           description: l.description ?? "",
           quantity: String(l.quantity ?? "1"),
           uom_id: l.uom_id ?? "",
+          uom_factor: String(l.uom_factor ?? "1"),
           unit_price: String(l.unit_price ?? "0"),
           discount_pct: String(l.discount_pct ?? "0"),
           tax_id: l.tax_id ?? "",
@@ -117,7 +122,6 @@ export function QuotationForm({
 
   const prodMap = useMemo(() => productMap(products), [products]);
   const taxMap = useMemo(() => new Map(taxes.map((t) => [t.id, Number(t.extra?.rate ?? 0)])), [taxes]);
-  const uomCodeById = useMemo(() => new Map(uoms.map((u) => [u.id, u.label])), [uoms]);
 
   // Build the dropdown <option> lists ONCE. Without this, every keystroke in any
   // field re-created N products × rows option elements, the main typing lag.
@@ -153,12 +157,24 @@ export function QuotationForm({
   function pickProduct(i: number, productId: string) {
     const p = prodMap.get(productId);
     loadHist(customerId, productId);
+    const base = p?.uoms?.[0];
     updateLine(i, {
       product_id: productId,
       description: p?.label.split(" — ").slice(1).join(" — ") || p?.label || "",
-      unit_price: String(p?.extra?.sale_price ?? "0"),
-      uom_id: (p?.extra?.uom_id as string) ?? "",
+      unit_price: String(base?.sale_price ?? p?.extra?.sale_price ?? "0"),
+      uom_id: base?.uom_id ?? (p?.extra?.uom_id as string) ?? "",
+      uom_factor: String(base?.factor ?? 1),
       tax_id: (p?.extra?.tax_id as string) ?? "",
+    });
+  }
+
+  // Switch a line to another of the product's units → adopt that unit's price + factor.
+  function pickUom(i: number, uomId: string, units: ProductUnit[]) {
+    const u = units.find((x) => x.uom_id === uomId);
+    updateLine(i, {
+      uom_id: uomId,
+      uom_factor: String(u?.factor ?? 1),
+      ...(u ? { unit_price: String(u.sale_price) } : {}),
     });
   }
 
@@ -175,12 +191,13 @@ export function QuotationForm({
     [lines, taxMap]
   );
 
-  /** Lines asking for more than we hold (stockable products only). */
+  /** Lines asking for more than we hold, compared in BASE units (qty × factor). */
   function overStockLines() {
     return lines.filter((l) => {
       const p = l.product_id ? prodMap.get(l.product_id) : undefined;
       const stock = p?.extra?.stock;
-      return stock != null && Number(l.quantity) > Number(stock);
+      const baseQty = Number(l.quantity) * (Number(l.uom_factor) || 1);
+      return stock != null && baseQty > Number(stock);
     });
   }
 
@@ -207,6 +224,7 @@ export function QuotationForm({
           description: l.description,
           quantity: Number(l.quantity),
           uom_id: l.uom_id || null,
+          uom_factor: Number(l.uom_factor) || 1,
           unit_price: Number(l.unit_price),
           discount_pct: Number(l.discount_pct),
           tax_id: l.tax_id || null,
@@ -304,8 +322,8 @@ export function QuotationForm({
                 tax_rate: l.tax_id ? taxMap.get(l.tax_id) ?? 0 : 0,
               });
               const lp = l.product_id ? prodMap.get(l.product_id) : undefined;
-              const lockedUom = (lp?.extra?.uom_id as string) || "";
-              const lockedUomCode = lockedUom ? uomCodeById.get(lockedUom) ?? "" : "";
+              const units = lp?.uoms ?? [];
+              const baseUomCode = units[0]?.label ?? "";
               return (
                 <tr key={l.key} className="border-t align-top">
                   <td className="p-1.5">
@@ -335,10 +353,13 @@ export function QuotationForm({
                     </div>
                     {lp?.extra?.stock != null && (() => {
                       const stock = Number(lp.extra!.stock);
-                      const over = Number(l.quantity) > stock;
+                      const factor = Number(l.uom_factor) || 1;
+                      const baseQty = Number(l.quantity) * factor;
+                      const over = baseQty > stock;
                       return (
                         <div className={`text-[11px] mt-1 ${over || stock <= 0 ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-                          In stock: {stock.toFixed(0)}{lockedUomCode ? ` ${lockedUomCode}` : ""}
+                          In stock: {stock.toFixed(0)}{baseUomCode ? ` ${baseUomCode}` : ""}
+                          {factor !== 1 && ` · line uses ${baseQty.toFixed(0)} ${baseUomCode}`}
                           {over && ` — only ${stock.toFixed(0)} available`}
                         </div>
                       );
@@ -359,10 +380,10 @@ export function QuotationForm({
                   <td className="p-1.5">
                     <SearchableSelect
                       value={l.uom_id}
-                      onChange={(v) => updateLine(i, { uom_id: v })}
-                      options={uomComboOptions}
+                      onChange={(v) => (units.length ? pickUom(i, v, units) : updateLine(i, { uom_id: v, uom_factor: "1" }))}
+                      options={units.length ? units.map((u) => ({ value: u.uom_id, label: u.label })) : uomComboOptions}
                       placeholder="—"
-                      disabled={isReadOnly || !!lockedUom}
+                      disabled={isReadOnly}
                       triggerClassName="h-9 px-2"
                     />
                   </td>
@@ -467,6 +488,7 @@ export function QuotationForm({
               description: desc,
               unit_price: String(item.extra.sale_price ?? "0"),
               uom_id: (item.extra.uom_id as string) ?? "",
+              uom_factor: "1",
               tax_id: (item.extra.tax_id as string) ?? "",
             });
           }

@@ -14,6 +14,7 @@ const invoiceLineSchema = z.object({
   description: z.string().min(1),
   quantity: z.coerce.number().positive(),
   uom_id: z.string().uuid().optional().nullable(),
+  uom_factor: z.coerce.number().positive().default(1), // base units per 1 of uom_id (frozen for stock)
   unit_price: z.coerce.number().min(0),
   discount_pct: z.coerce.number().min(0).max(100).default(0),
   tax_id: z.string().uuid().optional().nullable(),
@@ -96,6 +97,7 @@ export async function createInvoice(
         description: l.description,
         quantity: l.quantity,
         uom_id: l.uom_id ?? null,
+        uom_factor: l.uom_factor ?? 1,
         unit_price: l.unit_price,
         discount_pct: l.discount_pct,
         tax_id: l.tax_id ?? null,
