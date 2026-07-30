@@ -16,8 +16,9 @@ import { QuickAddVendor } from "@/components/quick-add/quick-add-vendor";
 import { QuickAddProduct } from "@/components/quick-add/quick-add-product";
 import { QuickAddUom } from "@/components/quick-add/quick-add-uom";
 
-type Opt = { id: string; label: string; extra?: Record<string, string | number | null> };
-type Line = { key: string; product_id: string; description: string; quantity: string; uom_id: string; unit_price: string; discount_pct: string; tax_pct: string };
+type ProductUnit = { uom_id: string; factor: number; price: number; label: string }; // price = cost per unit
+type Opt = { id: string; label: string; extra?: Record<string, string | number | null>; uoms?: ProductUnit[] };
+type Line = { key: string; product_id: string; description: string; quantity: string; uom_id: string; uom_factor: string; unit_price: string; discount_pct: string; tax_pct: string };
 
 export type POInitial = {
   id: string;
@@ -29,10 +30,10 @@ export type POInitial = {
   currency: string;
   notes: string | null;
   status: string;
-  lines: Array<{ product_id: string | null; description: string; quantity: number | string; uom_id: string | null; unit_price: number | string; discount_pct: number | string; tax_pct: number | string }>;
+  lines: Array<{ product_id: string | null; description: string; quantity: number | string; uom_id: string | null; uom_factor?: number | string | null; unit_price: number | string; discount_pct: number | string; tax_pct: number | string }>;
 };
 
-const emptyLine = (): Line => ({ key: crypto.randomUUID(), product_id: "", description: "", quantity: "1", uom_id: "", unit_price: "0", discount_pct: "0", tax_pct: "0" });
+const emptyLine = (): Line => ({ key: crypto.randomUUID(), product_id: "", description: "", quantity: "1", uom_id: "", uom_factor: "1", unit_price: "0", discount_pct: "0", tax_pct: "0" });
 
 /**
  * Purchase order. Product / Unit / Vendor are picked from master data (with
@@ -64,7 +65,7 @@ export function PurchaseOrderForm({
     initial?.lines.length
       ? initial.lines.map((l) => ({
           key: crypto.randomUUID(), product_id: l.product_id ?? "", description: l.description ?? "",
-          quantity: String(l.quantity ?? "1"), uom_id: l.uom_id ?? "", unit_price: String(l.unit_price ?? "0"),
+          quantity: String(l.quantity ?? "1"), uom_id: l.uom_id ?? "", uom_factor: String(l.uom_factor ?? "1"), unit_price: String(l.unit_price ?? "0"),
           discount_pct: String(l.discount_pct ?? "0"), tax_pct: String(l.tax_pct ?? "0"),
         }))
       : [emptyLine()]
@@ -83,12 +84,24 @@ export function PurchaseOrderForm({
   }
   function pickProduct(i: number, productId: string) {
     const p = prodMap.get(productId);
+    const base = p?.uoms?.[0];
     updateLine(i, {
       product_id: productId,
       description: p?.label.split(" — ").slice(1).join(" — ") || p?.label || "",
-      unit_price: String(p?.extra?.cost_price ?? "0"),
-      uom_id: (p?.extra?.uom_id as string) ?? "",
+      unit_price: String(base?.price ?? p?.extra?.cost_price ?? "0"),
+      uom_id: base?.uom_id ?? (p?.extra?.uom_id as string) ?? "",
+      uom_factor: String(base?.factor ?? 1),
       tax_pct: String(p?.extra?.tax_rate ?? "0"),
+    });
+  }
+
+  // Switch a line to another of the product's units → adopt that unit's cost + factor.
+  function pickUom(i: number, uomId: string, units: ProductUnit[]) {
+    const u = units.find((x) => x.uom_id === uomId);
+    updateLine(i, {
+      uom_id: uomId,
+      uom_factor: String(u?.factor ?? 1),
+      ...(u ? { unit_price: String(u.price) } : {}),
     });
   }
 
@@ -117,7 +130,7 @@ export function PurchaseOrderForm({
         notes: notes || null,
         lines: lines.map((l) => ({
           product_id: l.product_id || null, description: l.description, quantity: Number(l.quantity),
-          uom_id: l.uom_id || null, unit_price: Number(l.unit_price), discount_pct: Number(l.discount_pct), tax_pct: Number(l.tax_pct) || 0,
+          uom_id: l.uom_id || null, uom_factor: Number(l.uom_factor) || 1, unit_price: Number(l.unit_price), discount_pct: Number(l.discount_pct), tax_pct: Number(l.tax_pct) || 0,
         })),
       });
       if (!res.ok) { toast.error(res.error); return; }
@@ -187,6 +200,7 @@ export function PurchaseOrderForm({
           <tbody>
             {lines.map((l, i) => {
               const lt = computeLine({ quantity: l.quantity, unit_price: l.unit_price, discount_pct: l.discount_pct, tax_rate: Number(l.tax_pct) || 0 });
+              const units = (l.product_id ? prodMap.get(l.product_id)?.uoms : undefined) ?? [];
               return (
                 <tr key={l.key} className="border-t align-top">
                   <td className="p-1.5">
@@ -209,21 +223,34 @@ export function PurchaseOrderForm({
                   <td className="p-1.5"><Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly} className="h-9" /></td>
                   <td className="p-1.5"><Input type="number" step="1" min="0" value={l.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
                   <td className="p-1.5">
-                    <div className="flex gap-1">
-                      <div className="min-w-0 flex-1">
-                        <SearchableSelect
-                          value={l.uom_id}
-                          onChange={(v) => updateLine(i, { uom_id: v })}
-                          options={uomComboOptions}
-                          placeholder="—"
-                          disabled={isReadOnly}
-                          triggerClassName="h-9 px-2"
-                        />
+                    {units.length ? (
+                      // Product line: restrict to the product's defined units so the
+                      // stock conversion factor is known; picking one sets its cost.
+                      <SearchableSelect
+                        value={l.uom_id}
+                        onChange={(v) => pickUom(i, v, units)}
+                        options={units.map((u) => ({ value: u.uom_id, label: u.label }))}
+                        placeholder="—"
+                        disabled={isReadOnly}
+                        triggerClassName="h-9 px-2"
+                      />
+                    ) : (
+                      <div className="flex gap-1">
+                        <div className="min-w-0 flex-1">
+                          <SearchableSelect
+                            value={l.uom_id}
+                            onChange={(v) => updateLine(i, { uom_id: v, uom_factor: "1" })}
+                            options={uomComboOptions}
+                            placeholder="—"
+                            disabled={isReadOnly}
+                            triggerClassName="h-9 px-2"
+                          />
+                        </div>
+                        {!isReadOnly && (
+                          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Add new unit" onClick={() => setUomAddLine(i)}><Plus className="h-4 w-4" /></Button>
+                        )}
                       </div>
-                      {!isReadOnly && (
-                        <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Add new unit" onClick={() => setUomAddLine(i)}><Plus className="h-4 w-4" /></Button>
-                      )}
-                    </div>
+                    )}
                   </td>
                   <td className="p-1.5"><Input type="number" step="0.01" value={l.unit_price} onChange={(e) => updateLine(i, { unit_price: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
                   <td className="p-1.5"><Input type="number" step="0.01" value={l.discount_pct} onChange={(e) => updateLine(i, { discount_pct: e.target.value })} disabled={isReadOnly} className="h-9 text-right" /></td>
@@ -285,7 +312,7 @@ export function PurchaseOrderForm({
           setProducts((prev) => [...prev, { id: item.id, label: item.label, extra: item.extra }]);
           if (productAddLine !== null) {
             const desc = item.label.split(" — ").slice(1).join(" — ") || item.label;
-            updateLine(productAddLine, { product_id: item.id, description: desc, uom_id: (item.extra.uom_id as string) ?? "" });
+            updateLine(productAddLine, { product_id: item.id, description: desc, uom_id: (item.extra.uom_id as string) ?? "", uom_factor: "1" });
           }
         }}
       />

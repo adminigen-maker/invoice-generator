@@ -16,7 +16,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { QuickAddCustomer } from "@/components/quick-add/quick-add-customer";
 import { QuickAddProduct } from "@/components/quick-add/quick-add-product";
 
-type ProductUnit = { uom_id: string; factor: number; sale_price: number; label: string };
+type ProductUnit = { uom_id: string; factor: number; price: number; label: string };
 type Opt = { id: string; label: string; extra?: Record<string, string | number | null>; uoms?: ProductUnit[] };
 type Line = {
   key: string;
@@ -161,7 +161,7 @@ export function QuotationForm({
     updateLine(i, {
       product_id: productId,
       description: p?.label.split(" — ").slice(1).join(" — ") || p?.label || "",
-      unit_price: String(base?.sale_price ?? p?.extra?.sale_price ?? "0"),
+      unit_price: String(base?.price ?? p?.extra?.sale_price ?? "0"),
       uom_id: base?.uom_id ?? (p?.extra?.uom_id as string) ?? "",
       uom_factor: String(base?.factor ?? 1),
       tax_id: (p?.extra?.tax_id as string) ?? "",
@@ -174,7 +174,7 @@ export function QuotationForm({
     updateLine(i, {
       uom_id: uomId,
       uom_factor: String(u?.factor ?? 1),
-      ...(u ? { unit_price: String(u.sale_price) } : {}),
+      ...(u ? { unit_price: String(u.price) } : {}),
     });
   }
 

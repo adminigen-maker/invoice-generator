@@ -143,14 +143,14 @@ export async function createCreditNote(
 
     const { data: inv } = await supabase
       .from("invoice")
-      .select("id, number, customer_id, currency, status, posted_at, lines:invoice_line(id, product_id, description, quantity, uom_id, unit_price, discount_pct, tax_id)")
+      .select("id, number, customer_id, currency, status, posted_at, lines:invoice_line(id, product_id, description, quantity, uom_id, uom_factor, unit_price, discount_pct, tax_id)")
       .eq("id", invoiceId)
       .maybeSingle();
     if (!inv) return { ok: false, error: "Invoice not found." };
     if (!inv.posted_at) return { ok: false, error: "Post the invoice before recording a return." };
     if (inv.status === "cancelled") return { ok: false, error: "This invoice is cancelled." };
 
-    type InvLine = { id: string; product_id: string | null; description: string; quantity: number; uom_id: string | null; unit_price: number; discount_pct: number; tax_id: string | null };
+    type InvLine = { id: string; product_id: string | null; description: string; quantity: number; uom_id: string | null; uom_factor: number | null; unit_price: number; discount_pct: number; tax_id: string | null };
     const byId = new Map((inv.lines ?? []).map((l: InvLine) => [l.id, l]));
 
     // How much of each line has already been credited.
@@ -194,7 +194,7 @@ export async function createCreditNote(
       subtotal += t.line_subtotal; discountTotal += t.line_discount; taxTotal += t.line_tax; total += t.line_total;
       return {
         invoice_line_id: l.id, sequence: i, product_id: l.product_id, description: l.description,
-        quantity: Number(r.quantity), uom_id: l.uom_id, unit_price: l.unit_price, discount_pct: l.discount_pct,
+        quantity: Number(r.quantity), uom_id: l.uom_id, uom_factor: Number(l.uom_factor ?? 1), unit_price: l.unit_price, discount_pct: l.discount_pct,
         tax_id: l.tax_id, line_subtotal: t.line_subtotal, line_discount: t.line_discount, line_tax: t.line_tax, line_total: t.line_total,
       };
     });
@@ -233,15 +233,16 @@ export async function createCreditNote(
       const [{ data: stockLoc }, { data: custLoc }, { data: prods }] = await Promise.all([
         supabase.from("location").select("id").eq("kind", "stock").limit(1).maybeSingle(),
         supabase.from("location").select("id").eq("kind", "customer").limit(1).maybeSingle(),
-        supabase.from("product").select("id, cost_price, is_stockable").in("id", productIds),
+        supabase.from("product").select("id, uom_id, cost_price, is_stockable").in("id", productIds),
       ]);
-      const meta = new Map((prods ?? []).map((p: { id: string; cost_price: number; is_stockable: boolean }) => [p.id, p]));
+      const meta = new Map((prods ?? []).map((p: { id: string; uom_id: string; cost_price: number; is_stockable: boolean }) => [p.id, p]));
       const moves = stockable
         .filter((l) => meta.get(l.product_id as string)?.is_stockable)
         .map((l) => ({
           product_id: l.product_id,
-          uom_id: l.uom_id,
-          quantity: Number(l.quantity),
+          // Base unit + base-unit quantity so returns match the stock ledger.
+          uom_id: meta.get(l.product_id as string)?.uom_id ?? l.uom_id,
+          quantity: Number(l.quantity) * Number(l.uom_factor ?? 1),
           source_location_id: custLoc?.id ?? null,
           dest_location_id: stockLoc?.id ?? null,
           reference_type: "credit_note",

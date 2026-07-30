@@ -12,6 +12,7 @@ const lineSchema = z.object({
   description: z.string().min(1),
   quantity: z.coerce.number().positive(),
   uom_id: z.string().uuid().optional().nullable(),
+  uom_factor: z.coerce.number().positive().default(1), // base units per 1 of uom_id
   unit_price: z.coerce.number().min(0),
   discount_pct: z.coerce.number().min(0).max(100).default(0),
   tax_pct: z.coerce.number().min(0).max(100).default(0),
@@ -46,6 +47,7 @@ async function saveLines(poId: string, lines: z.infer<typeof lineSchema>[]) {
       sequence: i,
       product_id: l.product_id ?? null,   // linked to master
       uom_id: l.uom_id ?? null,           // linked to master
+      uom_factor: l.uom_factor ?? 1,
       tax_id: null,                        // tax is a free % (tax_pct), not a tax_rate link
       description: l.description,
       quantity: l.quantity,
@@ -136,12 +138,12 @@ export async function receivePurchaseOrder(id: string): Promise<Result> {
 
     const { data: po } = await supabase
       .from("purchase_order")
-      .select("id, number, status, warehouse_id, lines:purchase_order_line(id, product_id, uom_id, quantity, unit_price)")
+      .select("id, number, status, warehouse_id, lines:purchase_order_line(id, product_id, uom_id, uom_factor, quantity, unit_price)")
       .eq("id", id).maybeSingle();
     if (!po) return { ok: false, error: "Purchase order not found." };
     if (po.status !== "confirmed") return { ok: false, error: "Only confirmed purchase orders can be received." };
 
-    const lines = (po.lines ?? []) as Array<{ id: string; product_id: string | null; uom_id: string | null; quantity: number; unit_price: number }>;
+    const lines = (po.lines ?? []) as Array<{ id: string; product_id: string | null; uom_id: string | null; uom_factor: number | null; quantity: number; unit_price: number }>;
     const productLines = lines.filter((l) => l.product_id);
 
     // Idempotency: if this PO already posted stock (e.g. a receive that ran the
@@ -158,27 +160,35 @@ export async function receivePurchaseOrder(id: string): Promise<Result> {
     if (productLines.length && !alreadyPosted) {
       const stockQ = supabase.from("location").select("id").eq("kind", "stock");
       if (po.warehouse_id) stockQ.eq("warehouse_id", po.warehouse_id);
-      const [{ data: stockLoc }, { data: vendLoc }] = await Promise.all([
+      const productIds = Array.from(new Set(productLines.map((l) => l.product_id))) as string[];
+      const [{ data: stockLoc }, { data: vendLoc }, { data: baseUoms }] = await Promise.all([
         stockQ.limit(1).maybeSingle(),
         supabase.from("location").select("id").eq("kind", "vendor").limit(1).maybeSingle(),
+        supabase.from("product").select("id, uom_id").in("id", productIds),
       ]);
       if (!stockLoc) return { ok: false, error: "No stock location is configured to receive into." };
+      const baseUomOf = new Map((baseUoms ?? []).map((p: { id: string; uom_id: string }) => [p.id, p.uom_id]));
 
       const { data: user } = await supabase.auth.getUser();
       const today = new Date().toISOString().slice(0, 10);
-      const moves = productLines.map((l) => ({
-        product_id: l.product_id,
-        uom_id: l.uom_id,
-        quantity: Number(l.quantity),
-        source_location_id: vendLoc?.id ?? null,
-        dest_location_id: stockLoc.id,
-        reference_type: "purchase_order",
-        reference_id: po.id,
-        unit_cost: Number(l.unit_price),
-        move_date: today,
-        notes: `Received ${po.number}`,
-        created_by: user.user?.id,
-      }));
+      // Receive in BASE units: N of a unit with factor F adds N×F base units, at a
+      // per-base cost of unit_price ÷ F (so cost stays comparable to cost_price).
+      const moves = productLines.map((l) => {
+        const factor = Number(l.uom_factor ?? 1) || 1;
+        return {
+          product_id: l.product_id,
+          uom_id: baseUomOf.get(l.product_id as string) ?? l.uom_id,
+          quantity: Number(l.quantity) * factor,
+          source_location_id: vendLoc?.id ?? null,
+          dest_location_id: stockLoc.id,
+          reference_type: "purchase_order",
+          reference_id: po.id,
+          unit_cost: Number(l.unit_price) / factor,
+          move_date: today,
+          notes: `Received ${po.number}`,
+          created_by: user.user?.id,
+        };
+      });
       const { error: moveErr } = await supabase.from("stock_move").insert(moves);
       if (moveErr) {
         return {
@@ -189,9 +199,11 @@ export async function receivePurchaseOrder(id: string): Promise<Result> {
         };
       }
 
-      // Record last purchase price/date on each product — SEPARATE from cost_price.
+      // Record last purchase price/date on each product — per BASE unit (unit_price
+      // ÷ factor), SEPARATE from cost_price, so it's comparable to the master cost.
       for (const l of productLines) {
-        await supabase.from("product").update({ last_purchase_price: Number(l.unit_price), last_purchase_date: today }).eq("id", l.product_id);
+        const factor = Number(l.uom_factor ?? 1) || 1;
+        await supabase.from("product").update({ last_purchase_price: Number(l.unit_price) / factor, last_purchase_date: today }).eq("id", l.product_id);
       }
     }
 
