@@ -309,7 +309,10 @@ export function PurchaseOrderForm({
         uoms={uoms}
         taxes={[]}
         onCreated={(item) => {
-          setProducts((prev) => [...prev, { id: item.id, label: item.label, extra: item.extra }]);
+          // Attach a base-unit list so the line uses the RESTRICTED UoM picker
+          // (quick-add doesn't collect cost, so the base unit's price is 0).
+          const baseUnit = { uom_id: (item.extra.uom_id as string) ?? "", factor: 1, price: 0, label: uoms.find((u) => u.id === item.extra.uom_id)?.label ?? "" };
+          setProducts((prev) => [...prev, { id: item.id, label: item.label, extra: item.extra, uoms: [baseUnit] }]);
           if (productAddLine !== null) {
             const desc = item.label.split(" — ").slice(1).join(" — ") || item.label;
             updateLine(productAddLine, { product_id: item.id, description: desc, uom_id: (item.extra.uom_id as string) ?? "", uom_factor: "1" });

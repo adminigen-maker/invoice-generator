@@ -374,7 +374,10 @@ export function InvoiceForm({ customers: customersInit, products: productsInit, 
         uoms={uoms}
         taxes={taxes}
         onCreated={(item) => {
-          setProducts((prev) => [...prev, { id: item.id, label: item.label, extra: item.extra }]);
+          // Attach a base-unit list so the line uses the RESTRICTED UoM picker
+          // (a brand-new product has only its base unit — no undefined-factor units).
+          const baseUnit = { uom_id: (item.extra.uom_id as string) ?? "", factor: 1, price: Number(item.extra.sale_price ?? 0), label: uoms.find((u) => u.id === item.extra.uom_id)?.label ?? "" };
+          setProducts((prev) => [...prev, { id: item.id, label: item.label, extra: item.extra, uoms: [baseUnit] }]);
           if (productAddLine !== null) {
             const desc = item.label.split(" — ").slice(1).join(" — ") || item.label;
             updateLine(productAddLine, {
