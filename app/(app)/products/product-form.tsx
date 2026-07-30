@@ -91,8 +91,11 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
       .map((u) => ({ value: u.id, label: u.label }));
 
   const gridCols = canViewCost
-    ? "md:grid-cols-[minmax(0,1fr)_110px_120px_120px_40px]"
-    : "md:grid-cols-[minmax(0,1fr)_110px_120px_40px]";
+    ? "md:grid-cols-[minmax(0,1fr)_120px_120px_120px_40px]"
+    : "md:grid-cols-[minmax(0,1fr)_120px_120px_40px]";
+  // Short code of the base unit (row 0), e.g. "PCS" from "PCS — Pieces".
+  const codeOf = (uomId: string) => (uoms.find((u) => u.id === uomId)?.label ?? "").split(" — ")[0];
+  const baseCode = codeOf(units[0]?.uom_id ?? "") || "base unit";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -164,9 +167,9 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
           <div>
             <Label>Units &amp; prices <span className="text-destructive">*</span></Label>
             <p className="text-xs text-muted-foreground mt-0.5">
-              The <span className="font-medium">first row</span> is the base unit stock is counted in.
-              Add bigger units below — <span className="font-medium">Base units</span> = how many base units make one
-              (e.g. 1&nbsp;Box = 12).
+              <span className="font-medium">Row 1</span> = the smallest unit you keep in stock (e.g. Piece) — its
+              quantity is always 1. For a bigger pack (e.g. Box), pick it and enter <span className="font-medium">how
+              many base units it holds</span> (a box of 12 → 12). You can then sell &amp; buy in either unit.
             </p>
           </div>
           <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={addUom}>
@@ -177,43 +180,52 @@ export function ProductForm({ initial, uoms, taxes, categories: categoriesInit, 
         <div className="space-y-2 pt-1">
           <div className={`hidden md:grid ${gridCols} gap-2 px-1 text-xs text-muted-foreground`}>
             <span>Unit</span>
-            <span>Base units</span>
+            <span>Qty in {baseCode}</span>
             <span>Sale price</span>
             {canViewCost && <span>Cost price</span>}
             <span />
           </div>
           {units.map((row, i) => {
             const isBase = i === 0;
+            const rowCode = codeOf(row.uom_id);
             return (
-              <div key={row.key} className={`grid grid-cols-2 ${gridCols} gap-2 items-center`}>
-                <div className="col-span-2 md:col-span-1">
-                  <SearchableSelect
-                    value={row.uom_id}
-                    onChange={(v) => updateUom(row.key, { uom_id: v })}
-                    options={optionsFor(row)}
-                    placeholder={isBase ? "— base unit —" : "— unit —"}
-                  />
+              <div key={row.key} className="space-y-0.5">
+                <div className={`grid grid-cols-2 ${gridCols} gap-2 items-center`}>
+                  <div className="col-span-2 md:col-span-1">
+                    <SearchableSelect
+                      value={row.uom_id}
+                      onChange={(v) => updateUom(row.key, { uom_id: v })}
+                      options={optionsFor(row)}
+                      placeholder={isBase ? "— base unit (e.g. Piece) —" : "— bigger unit (e.g. Box) —"}
+                    />
+                  </div>
+                  {isBase ? (
+                    <Input value="1" disabled readOnly title="The base unit is always 1" className="bg-muted/50 text-muted-foreground text-center" aria-label="Quantity in base unit" />
+                  ) : (
+                    <Input type="number" step="0.000001" min="0" value={row.factor}
+                      onChange={(e) => updateUom(row.key, { factor: e.target.value })} placeholder="12" aria-label="Quantity in base unit" />
+                  )}
+                  <Input type="number" step="0.01" min="0" value={row.sale_price}
+                    onChange={(e) => updateUom(row.key, { sale_price: e.target.value })} aria-label="Sale price" />
+                  {canViewCost && (
+                    <Input type="number" step="0.01" min="0" value={row.cost_price}
+                      onChange={(e) => updateUom(row.key, { cost_price: e.target.value })} aria-label="Cost price" />
+                  )}
+                  {isBase ? (
+                    <span className="hidden md:block text-[10px] text-muted-foreground text-center">base</span>
+                  ) : (
+                    <Button type="button" variant="ghost" size="icon" className="shrink-0"
+                      onClick={() => removeUom(row.key)} title="Remove unit">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
-                {isBase ? (
-                  <Input value="1" disabled readOnly title="The base unit is always 1" className="bg-muted/50 text-muted-foreground text-center" aria-label="Base units" />
-                ) : (
-                  <Input type="number" step="0.000001" min="0" value={row.factor}
-                    onChange={(e) => updateUom(row.key, { factor: e.target.value })} placeholder="12" aria-label="Base units" />
-                )}
-                <Input type="number" step="0.01" min="0" value={row.sale_price}
-                  onChange={(e) => updateUom(row.key, { sale_price: e.target.value })} aria-label="Sale price" />
-                {canViewCost && (
-                  <Input type="number" step="0.01" min="0" value={row.cost_price}
-                    onChange={(e) => updateUom(row.key, { cost_price: e.target.value })} aria-label="Cost price" />
-                )}
-                {isBase ? (
-                  <span className="hidden md:block text-[10px] text-muted-foreground text-center">base</span>
-                ) : (
-                  <Button type="button" variant="ghost" size="icon" className="shrink-0"
-                    onClick={() => removeUom(row.key)} title="Remove unit">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
+                {/* Plain-language confirmation of the conversion. */}
+                {isBase
+                  ? rowCode && <p className="text-[11px] text-muted-foreground md:pl-1">Stock is counted in {rowCode}.</p>
+                  : rowCode && baseCode !== "base unit" && (
+                      <p className="text-[11px] text-muted-foreground md:pl-1">1 {rowCode} = {Number(row.factor) || 0} {baseCode}</p>
+                    )}
               </div>
             );
           })}
