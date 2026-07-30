@@ -12,13 +12,11 @@ const productSchema = z.object({
   name: z.string().min(1, "Name required"),
   description: z.string().optional().nullable(),
   category_id: z.string().uuid().optional().nullable(),
-  uom_id: z.string().uuid("Unit of measure required"),
-  cost_price: z.coerce.number().min(0).default(0),
-  sale_price: z.coerce.number().min(0).default(0),
   tax_id: z.string().uuid().optional().nullable(),
   reorder_point: z.coerce.number().min(0).optional().nullable(),
   is_stockable: z.coerce.boolean().default(true),
   is_active: z.coerce.boolean().default(true),
+  // uom_id / sale_price / cost_price now come from the units table (row 0 = base).
 });
 
 type FormResult = { ok: true; id: string } | { ok: false; error: string };
@@ -36,26 +34,29 @@ const productUomRowSchema = z.object({
 });
 type ProductUomRow = z.infer<typeof productUomRowSchema>;
 
-/** Read + validate the JSON `extra_uoms` field. Throws (caught → friendly error). */
-function parseExtraUoms(fd: FormData, baseUomId: string): ProductUomRow[] {
-  const raw = fd.get("extra_uoms");
-  if (typeof raw !== "string" || !raw.trim()) return [];
+/**
+ * Read + validate the JSON `units` field. Row 0 is the BASE unit (factor forced
+ * to 1) that maps onto the product; rows 1+ are the extra units. Throws on a bad
+ * payload (caught → friendly error) rather than failing open.
+ */
+function parseUnits(fd: FormData): ProductUomRow[] {
+  const raw = fd.get("units");
+  if (typeof raw !== "string" || !raw.trim()) throw new Error("Add at least the base unit.");
   let arr: unknown;
   try {
     arr = JSON.parse(raw);
   } catch {
-    throw new Error("Additional units are malformed.");
+    throw new Error("Units are malformed.");
   }
-  // Non-array but valid JSON ("null", "{}", …) must NOT be treated as an
-  // intentional clear-all — fail closed rather than silently deleting all units.
-  if (!Array.isArray(arr)) throw new Error("Additional units are malformed.");
+  if (!Array.isArray(arr) || arr.length === 0) throw new Error("Add at least the base unit.");
   const rows = arr
     .filter((r) => r && typeof r === "object" && (r as { uom_id?: string }).uom_id) // drop blank rows
     .map((r) => productUomRowSchema.parse(r));
+  if (!rows.length) throw new Error("Pick the base unit (the first row).");
+  rows[0] = { ...rows[0], factor: 1 }; // the base unit is always factor 1
   const seen = new Set<string>();
   for (const r of rows) {
-    if (r.uom_id === baseUomId) throw new Error("An additional unit can't be the same as the base unit.");
-    if (seen.has(r.uom_id)) throw new Error("Each additional unit can only be listed once.");
+    if (seen.has(r.uom_id)) throw new Error("Each unit can only be listed once.");
     seen.add(r.uom_id);
   }
   return rows;
@@ -125,22 +126,26 @@ export async function createProduct(fd: FormData): Promise<FormResult> {
   try {
     await requirePermission(P.inventory.productCreate);
     const input = parseForm(fd);
-    const extraUoms = parseExtraUoms(fd, input.uom_id); // validate before any write
+    const units = parseUnits(fd);        // [base, ...extras], validated before any write
+    const base = units[0];
     const canCost = await can(P.inventory.productViewCost);
-    // A user who can't see cost must not set the base cost either — fall back to
-    // the DB default (0) rather than trust a crafted cost_price in the payload.
-    if (!canCost) delete (input as Record<string, unknown>).cost_price;
     const supabase = await createClient();
     if (!input.sku) input.sku = await nextSku(supabase);
     const { data: user } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("product")
-      .insert({ ...input, created_by: user.user?.id })
+      .insert({
+        ...input,
+        uom_id: base.uom_id,
+        sale_price: base.sale_price,
+        cost_price: canCost ? base.cost_price : 0, // non-cost creator can't set base cost
+        created_by: user.user?.id,
+      })
       .select("id")
       .single();
     if (error) return { ok: false, error: error.message };
     try {
-      await saveProductUoms(supabase, data.id, extraUoms, canCost);
+      await saveProductUoms(supabase, data.id, units.slice(1), canCost);
     } catch (e) {
       // The product committed before its units; if the units fail, remove the
       // orphan so a retry doesn't create a duplicate (best effort — needs delete rights).
@@ -159,18 +164,18 @@ export async function updateProduct(id: string, fd: FormData): Promise<FormResul
   try {
     await requirePermission(P.inventory.productEdit);
     const input = parseForm(fd);
-    const extraUoms = parseExtraUoms(fd, input.uom_id); // validate before any write
+    const units = parseUnits(fd); // validate before any write
+    const base = units[0];
     const canCost = await can(P.inventory.productViewCost);
     const supabase = await createClient();
-    // Never blank out an existing SKU on edit.
-    const patch = { ...input };
+    // Base unit + prices come from the units table (row 0). Never blank an
+    // existing SKU, and only a cost-viewer may change the base cost.
+    const patch: Record<string, unknown> = { ...input, uom_id: base.uom_id, sale_price: base.sale_price };
     if (!patch.sku) delete patch.sku;
-    // A user who can't see cost never submits it — parseForm defaults the missing
-    // field to 0, which must not overwrite the real master cost.
-    if (!canCost) delete (patch as Record<string, unknown>).cost_price;
+    if (canCost) patch.cost_price = base.cost_price;
     const { error } = await supabase.from("product").update(patch).eq("id", id);
     if (error) return { ok: false, error: error.message };
-    await saveProductUoms(supabase, id, extraUoms, canCost);
+    await saveProductUoms(supabase, id, units.slice(1), canCost);
     revalidatePath("/products");
     revalidatePath(`/products/${id}`);
     return { ok: true, id };
