@@ -38,7 +38,7 @@ export default async function ProductsPage({
 
   let query = supabase
     .from("product")
-    .select("id, sku, name, sale_price, cost_price, last_purchase_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name)")
+    .select("id, sku, name, sale_price, cost_price, last_purchase_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name), units:product_uom(sequence, uom:unit_of_measure(code))")
     .order(order.column, { ascending: order.ascending })
     .limit(200);
 
@@ -160,7 +160,16 @@ export default async function ProductsPage({
                   </div>
                 </TableCell>
                 <TableCell>{(p.category as { name?: string } | null)?.name ?? "—"}</TableCell>
-                <TableCell>{(p.uom as { code?: string } | null)?.code ?? "—"}</TableCell>
+                <TableCell>
+                  {(() => {
+                    const base = (p.uom as { code?: string } | null)?.code;
+                    const extras = ((p as { units?: Array<{ sequence: number; uom?: { code?: string } | null }> }).units ?? [])
+                      .slice().sort((a, b) => a.sequence - b.sequence)
+                      .map((u) => u.uom?.code).filter(Boolean);
+                    const all = [base, ...extras].filter(Boolean) as string[];
+                    return all.length ? all.join(" · ") : "—";
+                  })()}
+                </TableCell>
                 <TableCell className="text-right">{formatMoney(p.sale_price)}</TableCell>
                 {perms.has(P.inventory.productViewCost) && (
                   <TableCell className="text-right text-muted-foreground">{formatMoney((p as { cost_price?: number }).cost_price)}</TableCell>

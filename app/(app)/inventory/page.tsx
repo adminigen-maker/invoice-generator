@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ListToolbar } from "@/components/list-toolbar";
 import { SelectFilter } from "@/components/select-filter";
+import { buildProductUnits } from "@/lib/product-units";
 import { AdjustStockButton } from "./adjust-stock-button";
 
 export const dynamic = "force-dynamic";
@@ -40,8 +41,19 @@ export default async function InventoryPage({
 
   const supabase = await createClient();
   const canAdjust = await can(P.inventory.stockAdjust);
-  const { data } = await supabase.rpc("stock_on_hand");
+  const [{ data }, { data: products }, { data: productUoms }, { data: uomRows }] = await Promise.all([
+    supabase.rpc("stock_on_hand"),
+    supabase.from("product").select("id, uom_id, sale_price").eq("is_active", true),
+    supabase.from("product_uom").select("product_id, uom_id, factor, sale_price").eq("is_active", true).order("sequence"),
+    supabase.from("unit_of_measure").select("id, code"),
+  ]);
   const all = ((data as StockRow[] | null) ?? []).map((r) => ({ ...r, on_hand: Number(r.on_hand) }));
+  // Each product's units (base first) so we can adjust in — and display — any unit.
+  const uomCode = new Map((uomRows ?? []).map((u) => [u.id, u.code]));
+  const unitsByProduct = buildProductUnits(products ?? [], productUoms ?? [], uomCode);
+  const unitsOf = (productId: string) =>
+    (unitsByProduct.get(productId) ?? []).map((u) => ({ uom_id: u.uom_id, factor: u.factor, label: u.label }));
+  const tidy = (n: number) => String(Number(n.toFixed(2)));
 
   // Stats reflect the whole catalogue; the table below reflects the filters.
   const lowCount = all.filter((r) => stockStatus(r) === "low").length;
@@ -138,7 +150,18 @@ export default async function InventoryPage({
                   <TableCell className="font-mono text-xs">{r.sku}</TableCell>
                   <TableCell className="font-medium">{r.name}</TableCell>
                   <TableCell>{r.uom ?? "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{r.on_hand.toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {tidy(r.on_hand)}
+                    {(() => {
+                      const extras = unitsOf(r.product_id).filter((u) => u.factor > 1);
+                      if (!extras.length) return null;
+                      return (
+                        <div className="text-[11px] text-muted-foreground font-normal">
+                          {extras.map((u) => `${tidy(r.on_hand / u.factor)} ${u.label}`).join(" · ")}
+                        </div>
+                      );
+                    })()}
+                  </TableCell>
                   <TableCell className="text-right font-mono text-muted-foreground">{rp != null ? rp.toFixed(2) : "—"}</TableCell>
                   {hasCost && (
                     <TableCell className="text-right font-mono text-muted-foreground">
@@ -156,7 +179,7 @@ export default async function InventoryPage({
                   </TableCell>
                   {canAdjust && (
                     <TableCell className="text-right">
-                      <AdjustStockButton productId={r.product_id} name={r.name} currentQty={r.on_hand} uom={r.uom} />
+                      <AdjustStockButton productId={r.product_id} name={r.name} currentQty={r.on_hand} uom={r.uom} units={unitsOf(r.product_id)} />
                     </TableCell>
                   )}
                 </TableRow>
