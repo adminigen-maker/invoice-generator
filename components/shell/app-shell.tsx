@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { CommandPalette, CommandPaletteButton } from "@/components/command-palette";
 import { SidebarContent } from "./nav-config";
 import { MobileNav } from "./mobile-nav";
 import { SignOutButton } from "./sign-out-button";
@@ -125,6 +126,7 @@ export function AppShell({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <CommandPaletteButton />
             <SignOutButton />
           </div>
         </header>
@@ -133,6 +135,9 @@ export function AppShell({
           {children}
         </main>
       </div>
+
+      {/* Global command menu (⌘K) + shortcuts help (?) — respects permissions. */}
+      <CommandPalette permissions={permissions} />
     </div>
   );
 }
