@@ -31,6 +31,7 @@ export const COMMANDS: Command[] = [
   // Go to — leader "g". Sequence only (too many pages for safe direct combos).
   { id: "go-dashboard", label: "Dashboard", href: "/", group: "Go to", keywords: "home", seqKey: "d" },
   { id: "go-reports", label: "Reports", href: "/reports", group: "Go to", perm: P.invoice.view, seqKey: "r" },
+  { id: "go-price-list", label: "Price list", href: "/price-list", group: "Go to", perm: P.inventory.productView, seqKey: "l" },
   { id: "go-quotations", label: "Quotations", href: "/quotations", group: "Go to", perm: P.sales.quotationView, seqKey: "q" },
   { id: "go-orders", label: "Sales Orders", href: "/sales-orders", group: "Go to", perm: P.sales.orderView, seqKey: "o" },
   { id: "go-deliveries", label: "Delivery Notes", href: "/delivery-notes", group: "Go to", perm: P.inventory.deliveryView, seqKey: "n" },

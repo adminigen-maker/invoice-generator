@@ -25,6 +25,7 @@ import {
   History,
   Undo2,
   Keyboard,
+  Tags,
   Check,
   ChevronsUpDown,
 } from "lucide-react";
@@ -49,6 +50,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { area: "operations", section: "Insights", label: "Dashboard", href: "/", icon: LayoutDashboard, color: "text-sky-500" },
   { area: "operations", section: "Insights", label: "Reports", href: "/reports", icon: BarChart3, color: "text-teal-500", perm: P.invoice.view },
+  { area: "operations", section: "Insights", label: "Price list", href: "/price-list", icon: Tags, color: "text-orange-500", perm: P.inventory.productView },
   { area: "operations", section: "Sales", label: "Quotations", href: "/quotations", icon: FileText, color: "text-violet-500", perm: P.sales.quotationView },
   { area: "operations", section: "Sales", label: "Sales Orders", href: "/sales-orders", icon: ClipboardList, color: "text-indigo-500", perm: P.sales.orderView },
   { area: "operations", section: "Fulfilment", label: "Delivery Notes", href: "/delivery-notes", icon: Truck, color: "text-amber-500", perm: P.inventory.deliveryView },
