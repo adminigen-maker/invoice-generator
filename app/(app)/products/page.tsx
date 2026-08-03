@@ -36,9 +36,14 @@ export default async function ProductsPage({
 
   const { data: categories } = await supabase.from("product_category").select("id, name").order("name");
 
+  // Only fetch per-unit cost for cost-permitted users (don't ship it otherwise).
+  const canCost = perms.has(P.inventory.productViewCost);
+  const unitsSel = canCost
+    ? "units:product_uom(sequence, sale_price, cost_price, uom:unit_of_measure(code))"
+    : "units:product_uom(sequence, sale_price, uom:unit_of_measure(code))";
   let query = supabase
     .from("product")
-    .select("id, sku, name, sale_price, cost_price, last_purchase_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name), units:product_uom(sequence, uom:unit_of_measure(code))")
+    .select(`id, sku, name, sale_price, cost_price, last_purchase_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name), ${unitsSel}`)
     .order(order.column, { ascending: order.ascending })
     .limit(200);
 
@@ -170,9 +175,33 @@ export default async function ProductsPage({
                     return all.length ? all.join(" · ") : "—";
                   })()}
                 </TableCell>
-                <TableCell className="text-right">{formatMoney(p.sale_price)}</TableCell>
+                <TableCell className="text-right">
+                  {formatMoney(p.sale_price)}
+                  {(() => {
+                    const extras = ((p as { units?: Array<{ sequence: number; sale_price: number; uom?: { code?: string } | null }> }).units ?? [])
+                      .slice().sort((a, b) => a.sequence - b.sequence);
+                    if (!extras.length) return null;
+                    return (
+                      <div className="text-[11px] text-muted-foreground font-normal">
+                        {extras.map((u) => `${u.uom?.code ?? ""} ${formatMoney(u.sale_price)}`).join(" · ")}
+                      </div>
+                    );
+                  })()}
+                </TableCell>
                 {perms.has(P.inventory.productViewCost) && (
-                  <TableCell className="text-right text-muted-foreground">{formatMoney((p as { cost_price?: number }).cost_price)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {formatMoney((p as { cost_price?: number }).cost_price)}
+                    {(() => {
+                      const extras = ((p as { units?: Array<{ sequence: number; cost_price?: number; uom?: { code?: string } | null }> }).units ?? [])
+                        .slice().sort((a, b) => a.sequence - b.sequence);
+                      if (!extras.length) return null;
+                      return (
+                        <div className="text-[11px] font-normal">
+                          {extras.map((u) => `${u.uom?.code ?? ""} ${formatMoney(u.cost_price ?? 0)}`).join(" · ")}
+                        </div>
+                      );
+                    })()}
+                  </TableCell>
                 )}
                 <TableCell>
                   {p.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
