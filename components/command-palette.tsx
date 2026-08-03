@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
-import { allowedCommands, type Command } from "@/lib/commands";
+import { allowedCommands, hotkeyLabel, type Command } from "@/lib/commands";
 import { ShortcutsReference } from "@/components/shortcuts-reference";
 
 /** True when focus is in a text field — so global single-key shortcuts don't fire mid-typing. */
@@ -27,6 +27,8 @@ export function CommandPalette({ permissions }: { permissions: string[] }) {
   useEffect(() => setIsMac(/mac/i.test(navigator.platform)), []);
 
   const cmds = useMemo(() => allowedCommands(permissions), [permissions]);
+  const cmdsRef = useRef(cmds);
+  cmdsRef.current = cmds;
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return cmds;
@@ -43,6 +45,15 @@ export function CommandPalette({ permissions }: { permissions: string[] }) {
       } else if (e.key === "?" && !e.metaKey && !e.ctrlKey && !isTypingTarget(e.target)) {
         e.preventDefault();
         setHelpOpen(true);
+      } else if (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey && !isTypingTarget(e.target)) {
+        // Direct Ctrl+Alt+<letter> (⌃⌥ on Mac). Match the physical key (e.code)
+        // so it works regardless of AltGr/keyboard layout output.
+        const cmd = cmdsRef.current.find((c) => c.hotkey && e.code === "Key" + c.hotkey.toUpperCase());
+        if (cmd) {
+          e.preventDefault();
+          setOpen(false);
+          router.push(cmd.href);
+        }
       }
     }
     const onOpenEvent = () => setOpen(true);
@@ -52,7 +63,7 @@ export function CommandPalette({ permissions }: { permissions: string[] }) {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("cmdk:open", onOpenEvent as EventListener);
     };
-  }, []);
+  }, [router]);
 
   // Reset + focus the search box each time the palette opens.
   useEffect(() => {
@@ -114,7 +125,14 @@ export function CommandPalette({ permissions }: { permissions: string[] }) {
                       className={`flex items-center justify-between gap-3 px-3 py-2 mx-1 rounded-md cursor-pointer text-sm ${i === active ? "bg-accent" : ""}`}
                     >
                       <span>{c.label}</span>
-                      {i === active && <CornerDownLeft className="h-3.5 w-3.5 text-muted-foreground" />}
+                      <span className="flex items-center gap-2 shrink-0">
+                        {c.hotkey && (
+                          <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {hotkeyLabel(c.hotkey, isMac)}
+                          </kbd>
+                        )}
+                        {i === active && <CornerDownLeft className="h-3.5 w-3.5 text-muted-foreground" />}
+                      </span>
                     </li>
                   </div>
                 );

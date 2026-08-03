@@ -1,4 +1,4 @@
-import { allowedCommands, type Command } from "@/lib/commands";
+import { allowedCommands, hotkeyLabel, type Command } from "@/lib/commands";
 
 // Presentational cheatsheet — shared by the "?" modal and Settings → Shortcuts.
 // isMac only affects which modifier label we show for the palette key.
@@ -32,7 +32,13 @@ export function ShortcutsReference({ permissions, isMac }: { permissions: string
               {items.map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 py-0.5">
                   <span className="text-foreground">{c.label}</span>
-                  <span className="text-xs text-muted-foreground truncate">{c.href}</span>
+                  {c.hotkey ? (
+                    <kbd className="inline-grid place-items-center h-6 px-1.5 rounded border bg-muted text-[11px] font-medium shrink-0">
+                      {hotkeyLabel(c.hotkey, !!isMac)}
+                    </kbd>
+                  ) : (
+                    <span className="text-xs text-muted-foreground truncate">{c.href}</span>
+                  )}
                 </li>
               ))}
             </ul>

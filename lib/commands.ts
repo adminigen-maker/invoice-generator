@@ -9,16 +9,18 @@ export type Command = {
   group: "Create" | "Go to";
   perm?: string;      // required permission code (undefined = everyone)
   keywords?: string;  // extra search terms
+  hotkey?: string;    // single letter — fired as Ctrl+Alt+<letter> (⌃⌥ on Mac)
 };
 
 export const COMMANDS: Command[] = [
-  // Create — the entities with a dedicated "New" page.
-  { id: "new-quotation", label: "New quotation", href: "/quotations/new", group: "Create", perm: P.sales.quotationCreate, keywords: "quote add create" },
-  { id: "new-invoice", label: "New invoice", href: "/invoices/new", group: "Create", perm: P.invoice.create, keywords: "bill add create" },
-  { id: "new-product", label: "New product", href: "/products/new", group: "Create", perm: P.inventory.productCreate, keywords: "item sku add create" },
-  { id: "new-customer", label: "New customer", href: "/customers/new", group: "Create", perm: P.sales.customerCreate, keywords: "client add create" },
-  { id: "new-vendor", label: "New vendor", href: "/vendors/new", group: "Create", perm: P.procurement.vendorCreate, keywords: "supplier add create" },
-  { id: "new-po", label: "New purchase order", href: "/purchase-orders/new", group: "Create", perm: P.procurement.poCreate, keywords: "po buy purchase add create" },
+  // Create — the entities with a dedicated "New" page. Each has a direct
+  // Ctrl+Alt+<letter> combo (⌃⌥ on Mac); letters are mnemonic.
+  { id: "new-quotation", label: "New quotation", href: "/quotations/new", group: "Create", perm: P.sales.quotationCreate, keywords: "quote add create", hotkey: "q" },
+  { id: "new-invoice", label: "New invoice", href: "/invoices/new", group: "Create", perm: P.invoice.create, keywords: "bill add create", hotkey: "i" },
+  { id: "new-product", label: "New product", href: "/products/new", group: "Create", perm: P.inventory.productCreate, keywords: "item sku add create", hotkey: "p" },
+  { id: "new-customer", label: "New customer", href: "/customers/new", group: "Create", perm: P.sales.customerCreate, keywords: "client add create", hotkey: "c" },
+  { id: "new-vendor", label: "New vendor", href: "/vendors/new", group: "Create", perm: P.procurement.vendorCreate, keywords: "supplier add create", hotkey: "v" },
+  { id: "new-po", label: "New purchase order", href: "/purchase-orders/new", group: "Create", perm: P.procurement.poCreate, keywords: "po buy purchase add create", hotkey: "o" },
 
   // Go to — jump to the main list/dashboard pages.
   { id: "go-dashboard", label: "Dashboard", href: "/", group: "Go to", keywords: "home" },
@@ -41,4 +43,9 @@ export const COMMANDS: Command[] = [
 export function allowedCommands(permissions: string[]): Command[] {
   const set = new Set(permissions);
   return COMMANDS.filter((c) => !c.perm || set.has(c.perm));
+}
+
+/** Human label for a command's direct combo, e.g. "Ctrl+Alt+P" / "⌃⌥P". */
+export function hotkeyLabel(letter: string, isMac: boolean): string {
+  return (isMac ? "⌃⌥" : "Ctrl+Alt+") + letter.toUpperCase();
 }
