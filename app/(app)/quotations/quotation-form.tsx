@@ -136,7 +136,7 @@ export function QuotationForm({
 
   // The customer's last price per product (null = never bought). Used to warn
   // when the price being quoted is higher than what they paid before.
-  const [priceHist, setPriceHist] = useState<Record<string, { price: number; date: string } | null>>({});
+  const [priceHist, setPriceHist] = useState<Record<string, { price: number; date: string; factor: number; uom: string | null } | null>>({});
   function loadHist(cust: string, productId: string) {
     if (!cust || !productId || priceHist[productId] !== undefined) return;
     getCustomerLastPrice(cust, productId).then((r) => setPriceHist((prev) => ({ ...prev, [productId]: r })));
@@ -364,12 +364,20 @@ export function QuotationForm({
                         </div>
                       );
                     })()}
-                    {l.product_id && priceHist[l.product_id] && (
-                      <div className={`text-[11px] mt-1 ${Number(l.unit_price) > priceHist[l.product_id]!.price ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
-                        Last to customer: {formatMoney(priceHist[l.product_id]!.price, currency)} · {formatDate(priceHist[l.product_id]!.date)}
-                        {Number(l.unit_price) > priceHist[l.product_id]!.price ? " ↑ higher" : ""}
-                      </div>
-                    )}
+                    {l.product_id && priceHist[l.product_id] && (() => {
+                      const h = priceHist[l.product_id]!;
+                      // Compare per BASE unit — a BOX price and a PCS price are
+                      // not comparable raw. price/factor is the per-base figure.
+                      const lastPerBase = h.price / (h.factor || 1);
+                      const curPerBase = Number(l.unit_price) / (Number(l.uom_factor) || 1);
+                      const higher = curPerBase > lastPerBase + 0.0001;
+                      return (
+                        <div className={`text-[11px] mt-1 ${higher ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
+                          Last to customer: {formatMoney(h.price, currency)}{h.uom ? ` / ${h.uom}` : ""} · {formatDate(h.date)}
+                          {higher ? " ↑ higher" : ""}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="p-1.5">
                     <Input value={l.description} onChange={(e) => updateLine(i, { description: e.target.value })} disabled={isReadOnly || !!l.product_id} className="h-9 disabled:opacity-70" />
