@@ -17,6 +17,7 @@ export type ReturnableLine = {
   quantity: number;   // originally invoiced
   credited: number;   // already returned
   unit_price: number;
+  uom?: string;       // the unit this line was sold in
 };
 
 /**
@@ -83,19 +84,22 @@ export function ReturnCreditButton({
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{l.description}</div>
                     <div className="text-[11px] text-muted-foreground">
-                      {formatMoney(l.unit_price, currency)} each · {rem} of {l.quantity} still returnable
+                      {formatMoney(l.unit_price, currency)} per {l.uom || "unit"} · {rem} of {l.quantity} {l.uom} still returnable
                     </div>
                   </div>
-                  <Input
-                    type="number"
-                    step="1"
-                    min="0"
-                    max={rem}
-                    value={qty[l.id] ?? ""}
-                    onChange={(e) => setQty((p) => ({ ...p, [l.id]: e.target.value }))}
-                    placeholder="0"
-                    className="h-9 w-24 text-right"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      max={rem}
+                      value={qty[l.id] ?? ""}
+                      onChange={(e) => setQty((p) => ({ ...p, [l.id]: e.target.value }))}
+                      placeholder="0"
+                      className="h-9 w-20 text-right"
+                    />
+                    {l.uom && <span className="text-xs text-muted-foreground w-8">{l.uom}</span>}
+                  </div>
                 </div>
               );
             })}

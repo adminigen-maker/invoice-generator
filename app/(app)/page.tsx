@@ -23,7 +23,7 @@ type Ops = {
   open_pos: number;
   low_stock: number;
   overdue_list: { id: string; number: string; customer: string; due_date: string; balance: number }[];
-  low_stock_list: { sku: string; name: string; reorder_point: number; on_hand: number }[];
+  low_stock_list: { sku: string; name: string; reorder_point: number; on_hand: number; uom?: string | null }[];
 };
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ customer?: string }> }) {
@@ -124,8 +124,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                       <div className="text-muted-foreground font-mono text-xs">{s.sku}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className={`font-mono ${Number(s.on_hand) <= 0 ? "text-destructive" : "text-amber-600"}`}>{Number(s.on_hand).toFixed(0)}</div>
-                      <div className="text-xs text-muted-foreground">reorder at {Number(s.reorder_point).toFixed(0)}</div>
+                      <div className={`font-mono ${Number(s.on_hand) <= 0 ? "text-destructive" : "text-amber-600"}`}>{Number(s.on_hand).toFixed(0)}{s.uom ? ` ${s.uom}` : ""}</div>
+                      <div className="text-xs text-muted-foreground">reorder at {Number(s.reorder_point).toFixed(0)}{s.uom ? ` ${s.uom}` : ""}</div>
                     </div>
                   </li>
                 ))}

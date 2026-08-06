@@ -61,8 +61,8 @@ function toCsv(r: Reports, vat: Vat | null, profit: Profit | null, valuation: Va
     lines.push("");
   }
   if (valuation) {
-    lines.push("Stock valuation,On hand,Cost,Value");
-    valuation.items.forEach((v) => lines.push(`${esc(v.name)},${v.on_hand},${v.cost},${v.value}`));
+    lines.push("Stock valuation,Unit,On hand,Cost,Value");
+    valuation.items.forEach((v) => lines.push(`${esc(v.name)},${esc(v.uom)},${v.on_hand},${v.cost},${v.value}`));
     lines.push(`Total stock value,,,${valuation.total_value}`);
     lines.push("");
   }
