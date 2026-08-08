@@ -50,7 +50,6 @@ type NavItem = {
 const NAV: NavItem[] = [
   { area: "operations", section: "Insights", label: "Dashboard", href: "/", icon: LayoutDashboard, color: "text-sky-500" },
   { area: "operations", section: "Insights", label: "Reports", href: "/reports", icon: BarChart3, color: "text-teal-500", perm: P.invoice.view },
-  { area: "operations", section: "Insights", label: "Price list", href: "/price-list", icon: Tags, color: "text-orange-500", perm: P.inventory.productView },
   { area: "operations", section: "Sales", label: "Quotations", href: "/quotations", icon: FileText, color: "text-violet-500", perm: P.sales.quotationView },
   { area: "operations", section: "Sales", label: "Sales Orders", href: "/sales-orders", icon: ClipboardList, color: "text-indigo-500", perm: P.sales.orderView },
   { area: "operations", section: "Fulfilment", label: "Delivery Notes", href: "/delivery-notes", icon: Truck, color: "text-amber-500", perm: P.inventory.deliveryView },
@@ -61,6 +60,7 @@ const NAV: NavItem[] = [
 
   { area: "master", section: "Catalog", label: "Products", href: "/products", icon: Package, color: "text-orange-500", perm: P.inventory.productView },
   { area: "master", section: "Catalog", label: "Inventory", href: "/inventory", icon: Boxes, color: "text-lime-600", perm: P.inventory.stockView },
+  { area: "master", section: "Catalog", label: "Price list", href: "/price-list", icon: Tags, color: "text-orange-500", perm: P.inventory.productView },
   { area: "master", section: "Partners", label: "Customers", href: "/customers", icon: Users, color: "text-cyan-600", perm: P.sales.customerView },
   { area: "master", section: "Partners", label: "Vendors", href: "/vendors", icon: Building2, color: "text-fuchsia-500", perm: P.procurement.vendorView },
   { area: "master", section: "Configuration", label: "Reference data", href: "/settings/reference", icon: Database, color: "text-indigo-500", perm: P.admin.companyEdit },
