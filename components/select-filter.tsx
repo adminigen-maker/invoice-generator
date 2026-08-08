@@ -40,7 +40,7 @@ export function SelectFilter({
       <select
         value={current}
         onChange={(e) => pick(e.target.value)}
-        className={`h-9 rounded-md border border-input bg-background px-2 text-sm ${className}`}
+        className={`h-10 rounded-md border border-input bg-background px-2 text-sm ${className}`}
       >
         <option value="">{allLabel}</option>
         {options.map((o) => (
