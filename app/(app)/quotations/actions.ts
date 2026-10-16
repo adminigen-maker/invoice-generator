@@ -14,6 +14,7 @@ const lineSchema = z.object({
   description: z.string().min(1),
   quantity: z.coerce.number().positive(),
   uom_id: z.string().uuid().optional().nullable(),
+  uom_factor: z.coerce.number().positive().default(1), // base units per 1 of uom_id
   unit_price: z.coerce.number().min(0),
   discount_pct: z.coerce.number().min(0).max(100).default(0),
   tax_id: z.string().uuid().optional().nullable(),
@@ -65,6 +66,7 @@ async function saveLines(quotationId: string, lines: z.infer<typeof lineSchema>[
       description: l.description,
       quantity: l.quantity,
       uom_id: l.uom_id ?? null,
+      uom_factor: l.uom_factor ?? 1,
       unit_price: l.unit_price,
       discount_pct: l.discount_pct,
       tax_id: l.tax_id ?? null,
@@ -208,7 +210,7 @@ export async function confirmQuotation(id: string): Promise<ActionResult> {
 
     const soLines = (q.lines ?? []).map((l: {
       id: string; sequence: number; product_id: string | null; description: string;
-      uom_id: string | null; quantity: number; unit_price: number; discount_pct: number;
+      uom_id: string | null; uom_factor: number | null; quantity: number; unit_price: number; discount_pct: number;
       tax_id: string | null; line_subtotal: number; line_discount: number;
       line_tax: number; line_total: number;
     }) => ({
@@ -218,6 +220,7 @@ export async function confirmQuotation(id: string): Promise<ActionResult> {
       product_id: l.product_id,
       description: l.description,
       uom_id: l.uom_id,
+      uom_factor: Number(l.uom_factor ?? 1),
       quantity_ordered: l.quantity,
       unit_price: l.unit_price,
       discount_pct: l.discount_pct,

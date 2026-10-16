@@ -63,6 +63,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
     quantity: Number(l.quantity),
     credited: creditedByLine.get(l.id) ?? 0,
     unit_price: Number(l.unit_price),
+    uom: l.uom?.code ?? "",
   }));
 
   return (

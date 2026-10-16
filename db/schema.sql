@@ -3530,3 +3530,579 @@ end $fn$;
 
 revoke execute on function public.dashboard_operational(uuid) from anon;
 grant execute on function public.dashboard_operational(uuid) to authenticated;
+
+-- ## SOURCE: db/migrations/0049_revoke_anon_execute_on_rpcs.sql
+-- Security: drop PUBLIC/anon EXECUTE on SECURITY DEFINER + sequence RPCs.
+-- A prior `revoke ... from anon` (0048) was a no-op because CREATE FUNCTION grants
+-- EXECUTE to PUBLIC by default, and PUBLIC includes anon — so you must revoke from
+-- PUBLIC. Confirmed leak: dashboard_operational(null) as anon returned live
+-- financials. App calls these only as `authenticated`; triggers run as owner.
+revoke execute on function public.dashboard_operational(uuid)       from public, anon;
+revoke execute on function public.customer_last_price(uuid, uuid)   from public, anon;
+revoke execute on function public.profit_report(date, date, uuid)   from public, anon;
+revoke execute on function public.reports_summary(date, date, uuid) from public, anon;
+revoke execute on function public.vat_report(date, date, uuid)      from public, anon;
+revoke execute on function public.next_document_number(text)        from public, anon;
+revoke execute on function public.recompute_invoice_status(uuid)    from public, anon;
+revoke execute on function public.rollup_invoice_credited(uuid)     from public, anon;
+revoke execute on function public.post_invoice_stock_moves()        from public, anon, authenticated;
+revoke execute on function public.trg_credit_note_rollup()          from public, anon, authenticated;
+
+-- ## SOURCE: db/migrations/0050_post_audit_hardening.sql
+-- Post-audit hardening: dashboard permission guard + audit-log integrity + FK indexes.
+create or replace function public.dashboard_operational(p_customer uuid default null)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare result jsonb; today date := current_date;
+begin
+  if not public.has_permission('invoice.view') then
+    return jsonb_build_object(
+      'overdue',  jsonb_build_object('count',0,'amount',0),
+      'due_soon', jsonb_build_object('count',0,'amount',0),
+      'collected_month', 0, 'draft_quotations', 0, 'awaiting_delivery', 0,
+      'awaiting_invoice', 0, 'open_pos', 0, 'low_stock', 0,
+      'overdue_list', '[]'::jsonb, 'low_stock_list', '[]'::jsonb);
+  end if;
+  select jsonb_build_object(
+    'overdue', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(balance),0))
+      from invoice where balance > 0.001 and status not in ('cancelled','draft') and due_date < today
+        and (p_customer is null or customer_id = p_customer)),
+    'due_soon', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(balance),0))
+      from invoice where balance > 0.001 and status not in ('cancelled','draft')
+        and due_date >= today and due_date <= today + 7
+        and (p_customer is null or customer_id = p_customer)),
+    'collected_month', (select coalesce(sum(pa.amount_allocated),0)
+      from payment p
+      join payment_allocation pa on pa.payment_id = p.id
+      join invoice inv on inv.id = pa.invoice_id
+      where p.payment_date >= date_trunc('month', today)::date
+        and (p_customer is null or inv.customer_id = p_customer)),
+    'draft_quotations', (select count(*) from quotation
+      where status = 'draft' and (p_customer is null or customer_id = p_customer)),
+    'awaiting_delivery', (select count(distinct so.id) from sales_order so
+      join sales_order_line l on l.sales_order_id = so.id
+      where so.status not in ('cancelled','closed') and l.quantity_ordered > l.quantity_delivered
+        and (p_customer is null or so.customer_id = p_customer)),
+    'awaiting_invoice', (select count(distinct so.id) from sales_order so
+      join sales_order_line l on l.sales_order_id = so.id
+      where so.status not in ('cancelled','closed') and l.quantity_delivered > l.quantity_invoiced
+        and (p_customer is null or so.customer_id = p_customer)),
+    'open_pos', (select count(*) from purchase_order where status = 'confirmed'),
+    'low_stock', (select count(*) from (
+        select p.reorder_point,
+          coalesce((select sum(sm.quantity) from stock_move sm join location dl on dl.id=sm.dest_location_id where sm.product_id=p.id and dl.kind='stock'),0)
+          - coalesce((select sum(sm.quantity) from stock_move sm join location sl on sl.id=sm.source_location_id where sm.product_id=p.id and sl.kind='stock'),0) as oh
+        from product p where p.is_stockable and p.is_active
+      ) s where s.reorder_point is not null and s.oh <= s.reorder_point),
+    'overdue_list', (select coalesce(jsonb_agg(row_to_json(x)),'[]'::jsonb) from (
+        select i.id, i.number, c.name as customer, i.due_date, i.balance
+        from invoice i join customer c on c.id = i.customer_id
+        where i.balance > 0.001 and i.status not in ('cancelled','draft') and i.due_date < today
+          and (p_customer is null or i.customer_id = p_customer)
+        order by i.due_date asc limit 8) x),
+    'low_stock_list', (select coalesce(jsonb_agg(row_to_json(z)),'[]'::jsonb) from (
+        select y.sku, y.name, y.reorder_point, y.on_hand from (
+          select p.sku, p.name, p.reorder_point,
+            coalesce((select sum(sm.quantity) from stock_move sm join location dl on dl.id=sm.dest_location_id where sm.product_id=p.id and dl.kind='stock'),0)
+            - coalesce((select sum(sm.quantity) from stock_move sm join location sl on sl.id=sm.source_location_id where sm.product_id=p.id and sl.kind='stock'),0) as on_hand
+          from product p where p.is_stockable and p.is_active
+        ) y where y.reorder_point is not null and y.on_hand <= y.reorder_point
+        order by y.on_hand asc limit 8) z)
+  ) into result;
+  return result;
+end $fn$;
+revoke execute on function public.dashboard_operational(uuid) from public, anon;
+grant  execute on function public.dashboard_operational(uuid) to authenticated;
+alter table public.audit_log alter column user_id set default auth.uid();
+drop policy if exists audit_insert on public.audit_log;
+create policy audit_insert on public.audit_log for insert to authenticated
+  with check (user_id = (select auth.uid()));
+create index if not exists idx_credit_note_line_invoice_line_id on public.credit_note_line(invoice_line_id);
+create index if not exists idx_credit_note_line_product_id      on public.credit_note_line(product_id);
+create index if not exists idx_credit_note_line_tax_id          on public.credit_note_line(tax_id);
+create index if not exists idx_credit_note_line_uom_id          on public.credit_note_line(uom_id);
+create index if not exists idx_purchase_order_created_by        on public.purchase_order(created_by);
+create index if not exists idx_purchase_order_warehouse_id      on public.purchase_order(warehouse_id);
+create index if not exists idx_purchase_order_line_product_id   on public.purchase_order_line(product_id);
+create index if not exists idx_purchase_order_line_tax_id       on public.purchase_order_line(tax_id);
+create index if not exists idx_purchase_order_line_uom_id       on public.purchase_order_line(uom_id);
+drop index if exists public.idx_credit_note_invoice_id;
+
+-- ## SOURCE: db/migrations/0051_lock_internal_recompute_helpers.sql
+-- Internal recompute helpers are owner-only (called via SECURITY DEFINER
+-- triggers rollup_invoice_paid / trg_credit_note_rollup); no external role needs them.
+revoke execute on function public.recompute_invoice_status(uuid) from authenticated;
+revoke execute on function public.rollup_invoice_credited(uuid)  from authenticated;
+
+-- ## SOURCE: db/migrations/0052_multi_uom_phase1.sql
+-- 0052 · Multi-UoM Phase 1: per-product extra units & pricing + line uom_factor.
+--
+-- The product's BASE unit stays on product.uom_id / sale_price / cost_price with
+-- an implicit factor of 1. product_uom holds ADDITIONAL selling units (Box,
+-- Carton, …): how many BASE units one of them equals (factor) and its own price.
+
+create table public.product_uom (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.product(id) on delete cascade,
+  uom_id uuid not null references public.unit_of_measure(id),
+  factor numeric(18,6) not null default 1,   -- base units per 1 of this unit (> 0)
+  sale_price numeric(18,4) not null default 0,
+  cost_price numeric(18,4) not null default 0,
+  barcode text,
+  sequence int not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  constraint product_uom_factor_positive check (factor > 0),
+  unique (product_id, uom_id)
+);
+create index idx_product_uom_product_id on public.product_uom(product_id);
+create index idx_product_uom_uom_id on public.product_uom(uom_id);
+
+alter table public.product_uom enable row level security;
+
+-- Access mirrors the parent product: managing a product's units IS editing the
+-- catalogue, gated by the same inventory.product.* permissions.
+create policy product_uom_read on public.product_uom for select to authenticated
+  using (public.has_permission('inventory.product.view'));
+create policy product_uom_insert on public.product_uom for insert to authenticated
+  with check (public.has_permission('inventory.product.create') or public.has_permission('inventory.product.edit'));
+create policy product_uom_update on public.product_uom for update to authenticated
+  using (public.has_permission('inventory.product.edit'))
+  with check (public.has_permission('inventory.product.edit'));
+create policy product_uom_delete on public.product_uom for delete to authenticated
+  using (public.has_permission('inventory.product.edit'));
+
+-- Freeze the unit->base conversion factor onto every document line, exactly like
+-- unit_price is frozen at transaction time. Default 1 keeps ALL existing rows and
+-- flows unchanged (quantity x 1 = quantity), so this phase changes no behaviour.
+alter table public.invoice_line        add column uom_factor numeric(18,6) not null default 1;
+alter table public.quotation_line      add column uom_factor numeric(18,6) not null default 1;
+alter table public.sales_order_line    add column uom_factor numeric(18,6) not null default 1;
+alter table public.delivery_note_line  add column uom_factor numeric(18,6) not null default 1;
+alter table public.purchase_order_line add column uom_factor numeric(18,6) not null default 1;
+alter table public.credit_note_line    add column uom_factor numeric(18,6) not null default 1;
+
+-- ## SOURCE: db/migrations/0053_multi_uom_phase2_invoice_stock.sql
+-- 0053 · Multi-UoM Phase 2: invoice stock posting converts to base units.
+--
+-- A line sold in a non-base unit (e.g. 2 Box, factor 12) must move 24 BASE units
+-- of stock. stock_on_hand/valuation sum stock_move.quantity per product IGNORING
+-- uom_id, so every move must be in the product's base unit. We multiply by the
+-- line's frozen uom_factor and stamp the product's base uom_id. uom_factor
+-- defaults to 1, so existing invoices are unaffected.
+create or replace function public.post_invoice_stock_moves()
+returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  ln record;
+  customer_loc uuid;
+  ship_from uuid;
+begin
+  if new.posted_at is null or old.posted_at is not null then
+    return new;
+  end if;
+
+  select id into customer_loc from location where kind = 'customer' limit 1;
+  select id into ship_from   from location where kind = 'stock'    limit 1;
+  if customer_loc is null or ship_from is null then
+    return new;
+  end if;
+
+  for ln in
+    select il.product_id,
+           p.uom_id as base_uom,
+           (il.quantity * coalesce(il.uom_factor, 1)) as base_qty
+    from invoice_line il
+    join product p on p.id = il.product_id
+    where il.invoice_id = new.id
+      and p.is_stockable = true
+      and il.quantity > 0
+      and il.delivery_note_line_id is null   -- not already shipped via a delivery note
+  loop
+    insert into stock_move (product_id, uom_id, quantity, source_location_id, dest_location_id,
+                            reference_type, reference_id, move_date, created_by)
+    values (ln.product_id, ln.base_uom, ln.base_qty, ship_from, customer_loc,
+            'invoice', new.id, current_date, new.created_by);
+  end loop;
+
+  return new;
+end;
+$function$;
+
+-- ## SOURCE: db/migrations/0054_multi_uom_phase3_delivery_stock.sql
+-- 0054 · Multi-UoM Phase 3: delivery-note goods issue converts to base units.
+-- Same rule as the invoice trigger: move quantity × uom_factor in the product's
+-- base unit. Joins product for the base uom (null-product lines can't move stock
+-- and are skipped, which the original insert couldn't do anyway). Default 1 =
+-- existing deliveries unchanged.
+create or replace function public.post_delivery_note_moves()
+returns trigger language plpgsql set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  ln record;
+  customer_loc uuid;
+  ship_from uuid;
+begin
+  if new.posted_at is null or old.posted_at is not null then
+    return new;
+  end if;
+
+  select id into customer_loc from location where kind = 'customer' limit 1;
+  if customer_loc is null then
+    raise exception 'No virtual customer location configured — seed one before posting deliveries';
+  end if;
+
+  for ln in
+    select dnl.*, p.uom_id as base_uom
+      from delivery_note_line dnl
+      join sales_order_line so_l on so_l.id = dnl.sales_order_line_id
+      join product p on p.id = dnl.product_id
+     where dnl.delivery_note_id = new.id
+  loop
+    ship_from := coalesce(
+      ln.source_location_id,
+      (select id from location where warehouse_id = new.warehouse_id and kind = 'stock' limit 1)
+    );
+    if ship_from is null then
+      raise exception 'No source stock location resolved for delivery %', new.number;
+    end if;
+
+    insert into stock_move
+      (product_id, uom_id, quantity, source_location_id, dest_location_id,
+       reference_type, reference_id, move_date, created_by, notes)
+    values
+      (ln.product_id, ln.base_uom, ln.quantity * coalesce(ln.uom_factor, 1), ship_from, customer_loc,
+       'delivery_note', new.id, now(), new.created_by, 'Auto: delivery ' || new.number);
+  end loop;
+
+  return new;
+end;
+$function$;
+
+-- ## SOURCE: db/migrations/0055_profit_report_uom_factor.sql
+-- 0055 · Multi-UoM fix: profit_report COGS must convert to BASE units.
+-- cost_price is per base unit, so COGS = quantity × uom_factor × cost_price
+-- (matching stock_move / stock_valuation). Without the factor, a sale of 2 Box
+-- (factor 12) booked cost for 2 units instead of 24, hugely overstating margin.
+-- by_product.qty is likewise reported in base units so mixed-unit sales don't
+-- conflate pieces and boxes.
+create or replace function public.profit_report(from_date date default null, to_date date default null, p_customer uuid default null)
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp'
+as $function$
+declare result jsonb;
+begin
+  if not public.has_permission('inventory.product.view_cost') then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+
+  select jsonb_build_object(
+    'from', from_date, 'to', to_date,
+    'totals', (
+      select jsonb_build_object(
+        'revenue', coalesce(sum(il.line_subtotal - il.line_discount), 0),
+        'cost',    coalesce(sum(il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0),
+        'profit',  coalesce(sum((il.line_subtotal - il.line_discount) - il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0))
+      from invoice_line il
+      join invoice i on i.id = il.invoice_id
+      left join product p on p.id = il.product_id
+      where i.status not in ('cancelled','draft')
+        and (from_date is null or i.invoice_date >= from_date)
+        and (to_date   is null or i.invoice_date <= to_date)
+        and (p_customer is null or i.customer_id = p_customer)),
+    'by_product', (
+      select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) from (
+        select coalesce(p.name, il.description) as name,
+               coalesce(sum(il.quantity * coalesce(il.uom_factor,1)), 0) as qty,
+               coalesce(sum(il.line_subtotal - il.line_discount), 0) as revenue,
+               coalesce(sum(il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0) as cost,
+               coalesce(sum((il.line_subtotal - il.line_discount) - il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0) as profit
+        from invoice_line il
+        join invoice i on i.id = il.invoice_id
+        left join product p on p.id = il.product_id
+        where i.status not in ('cancelled','draft')
+          and (from_date is null or i.invoice_date >= from_date)
+          and (to_date   is null or i.invoice_date <= to_date)
+          and (p_customer is null or i.customer_id = p_customer)
+        group by coalesce(p.name, il.description)
+        order by profit desc
+        limit 20
+      ) x),
+    'by_customer', (
+      select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) from (
+        select c.name as name,
+               coalesce(sum(il.line_subtotal - il.line_discount), 0) as revenue,
+               coalesce(sum(il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0) as cost,
+               coalesce(sum((il.line_subtotal - il.line_discount) - il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0) as profit
+        from invoice_line il
+        join invoice i on i.id = il.invoice_id
+        join customer c on c.id = i.customer_id
+        left join product p on p.id = il.product_id
+        where i.status not in ('cancelled','draft')
+          and (from_date is null or i.invoice_date >= from_date)
+          and (to_date   is null or i.invoice_date <= to_date)
+          and (p_customer is null or i.customer_id = p_customer)
+        group by c.name
+        order by profit desc
+        limit 20
+      ) x)
+  ) into result;
+  return result;
+end $function$;
+
+revoke execute on function public.profit_report(date, date, uuid) from public, anon;
+grant  execute on function public.profit_report(date, date, uuid) to authenticated;
+
+-- ## SOURCE: db/migrations/0056_reports_unit_info.sql
+-- 0056 · Multi-UoM Part B: show the base unit + base-unit quantity in the
+-- sales/profit "by product" reports.
+--   • reports_summary.top_products: qty now in BASE units (× uom_factor) and a
+--     `uom` (base unit code) is added.
+--   • profit_report.by_product: a `uom` (base unit code) is added (qty was
+--     already converted to base units in 0055).
+-- Both are otherwise unchanged from their prior definitions.
+
+create or replace function public.reports_summary(from_date date default null, to_date date default null, p_customer uuid default null)
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp'
+as $function$
+declare result jsonb; today date := current_date;
+begin
+  if not public.has_permission('invoice.view') then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+
+  select jsonb_build_object(
+    'from', from_date, 'to', to_date,
+    'totals', (
+      select jsonb_build_object(
+        'invoice_count', count(*),
+        'revenue', coalesce(sum(total), 0),
+        'collected', coalesce(sum(amount_paid), 0),
+        'outstanding', coalesce(sum(balance), 0))
+      from invoice
+      where status not in ('cancelled', 'draft')
+        and (from_date is null or invoice_date >= from_date)
+        and (to_date   is null or invoice_date <= to_date)
+        and (p_customer is null or customer_id = p_customer)),
+    'ar_aging', (
+      select jsonb_build_object(
+        'not_due',  coalesce(sum(case when due_date >= today then balance else 0 end), 0),
+        'd1_30',    coalesce(sum(case when due_date < today and due_date >= today - 30 then balance else 0 end), 0),
+        'd31_60',   coalesce(sum(case when due_date < today - 30 and due_date >= today - 60 then balance else 0 end), 0),
+        'd60_plus', coalesce(sum(case when due_date < today - 60 then balance else 0 end), 0))
+      from invoice
+      where balance > 0.001 and status not in ('cancelled', 'draft')
+        and (p_customer is null or customer_id = p_customer)),
+    'top_products', (
+      select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) from (
+        select coalesce(pr.name, il.description) as name,
+               max(uu.code) as uom,
+               sum(il.line_total) as revenue,
+               sum(il.quantity * coalesce(il.uom_factor, 1)) as qty
+        from invoice_line il
+        join invoice i on i.id = il.invoice_id and i.status not in ('cancelled', 'draft')
+          and (from_date is null or i.invoice_date >= from_date)
+          and (to_date   is null or i.invoice_date <= to_date)
+          and (p_customer is null or i.customer_id = p_customer)
+        left join product pr on pr.id = il.product_id
+        left join unit_of_measure uu on uu.id = pr.uom_id
+        group by coalesce(pr.name, il.description) order by sum(il.line_total) desc limit 8) x),
+    'top_customers', (
+      select coalesce(jsonb_agg(row_to_json(y)), '[]'::jsonb) from (
+        select c.name, sum(i.total) as revenue, count(*) as invoices
+        from invoice i join customer c on c.id = i.customer_id
+        where i.status not in ('cancelled', 'draft')
+          and (from_date is null or i.invoice_date >= from_date)
+          and (to_date   is null or i.invoice_date <= to_date)
+          and (p_customer is null or i.customer_id = p_customer)
+        group by c.name order by sum(i.total) desc limit 8) y),
+    'revenue_by_month', (
+      select coalesce(jsonb_agg(row_to_json(z) order by z.month), '[]'::jsonb) from (
+        select to_char(date_trunc('month', invoice_date), 'YYYY-MM') as month, sum(total) as revenue
+        from invoice
+        where status not in ('cancelled', 'draft')
+          and invoice_date >= coalesce(from_date, today - interval '12 months')
+          and (to_date is null or invoice_date <= to_date)
+          and (p_customer is null or customer_id = p_customer)
+        group by date_trunc('month', invoice_date)) z)
+  ) into result;
+  return result;
+end $function$;
+
+create or replace function public.profit_report(from_date date default null, to_date date default null, p_customer uuid default null)
+returns jsonb language plpgsql security definer set search_path to 'public', 'pg_temp'
+as $function$
+declare result jsonb;
+begin
+  if not public.has_permission('inventory.product.view_cost') then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+
+  select jsonb_build_object(
+    'from', from_date, 'to', to_date,
+    'totals', (
+      select jsonb_build_object(
+        'revenue', coalesce(sum(il.line_subtotal - il.line_discount), 0),
+        'cost',    coalesce(sum(il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0),
+        'profit',  coalesce(sum((il.line_subtotal - il.line_discount) - il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0))
+      from invoice_line il
+      join invoice i on i.id = il.invoice_id
+      left join product p on p.id = il.product_id
+      where i.status not in ('cancelled','draft')
+        and (from_date is null or i.invoice_date >= from_date)
+        and (to_date   is null or i.invoice_date <= to_date)
+        and (p_customer is null or i.customer_id = p_customer)),
+    'by_product', (
+      select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) from (
+        select coalesce(p.name, il.description) as name,
+               max(u.code) as uom,
+               coalesce(sum(il.quantity * coalesce(il.uom_factor,1)), 0) as qty,
+               coalesce(sum(il.line_subtotal - il.line_discount), 0) as revenue,
+               coalesce(sum(il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0) as cost,
+               coalesce(sum((il.line_subtotal - il.line_discount) - il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0) as profit
+        from invoice_line il
+        join invoice i on i.id = il.invoice_id
+        left join product p on p.id = il.product_id
+        left join unit_of_measure u on u.id = p.uom_id
+        where i.status not in ('cancelled','draft')
+          and (from_date is null or i.invoice_date >= from_date)
+          and (to_date   is null or i.invoice_date <= to_date)
+          and (p_customer is null or i.customer_id = p_customer)
+        group by coalesce(p.name, il.description)
+        order by profit desc
+        limit 20
+      ) x),
+    'by_customer', (
+      select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) from (
+        select c.name as name,
+               coalesce(sum(il.line_subtotal - il.line_discount), 0) as revenue,
+               coalesce(sum(il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0) as cost,
+               coalesce(sum((il.line_subtotal - il.line_discount) - il.quantity * coalesce(il.uom_factor,1) * coalesce(p.cost_price, 0)), 0) as profit
+        from invoice_line il
+        join invoice i on i.id = il.invoice_id
+        join customer c on c.id = i.customer_id
+        left join product p on p.id = il.product_id
+        where i.status not in ('cancelled','draft')
+          and (from_date is null or i.invoice_date >= from_date)
+          and (to_date   is null or i.invoice_date <= to_date)
+          and (p_customer is null or i.customer_id = p_customer)
+        group by c.name
+        order by profit desc
+        limit 20
+      ) x)
+  ) into result;
+  return result;
+end $function$;
+
+revoke execute on function public.reports_summary(date, date, uuid) from public, anon;
+grant  execute on function public.reports_summary(date, date, uuid) to authenticated;
+revoke execute on function public.profit_report(date, date, uuid) from public, anon;
+grant  execute on function public.profit_report(date, date, uuid) to authenticated;
+
+-- ## SOURCE: db/migrations/0057_dashboard_low_stock_uom.sql
+-- 0057 · Multi-UoM: the dashboard "Low stock" widget shows the base unit.
+-- Only change vs 0050: low_stock_list now selects the product's base uom code
+-- (join unit_of_measure). Everything else is reproduced verbatim.
+create or replace function public.dashboard_operational(p_customer uuid default null)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare result jsonb; today date := current_date;
+begin
+  if not public.has_permission('invoice.view') then
+    return jsonb_build_object(
+      'overdue',  jsonb_build_object('count',0,'amount',0),
+      'due_soon', jsonb_build_object('count',0,'amount',0),
+      'collected_month', 0, 'draft_quotations', 0, 'awaiting_delivery', 0,
+      'awaiting_invoice', 0, 'open_pos', 0, 'low_stock', 0,
+      'overdue_list', '[]'::jsonb, 'low_stock_list', '[]'::jsonb);
+  end if;
+  select jsonb_build_object(
+    'overdue', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(balance),0))
+      from invoice where balance > 0.001 and status not in ('cancelled','draft') and due_date < today
+        and (p_customer is null or customer_id = p_customer)),
+    'due_soon', (select jsonb_build_object('count', count(*), 'amount', coalesce(sum(balance),0))
+      from invoice where balance > 0.001 and status not in ('cancelled','draft')
+        and due_date >= today and due_date <= today + 7
+        and (p_customer is null or customer_id = p_customer)),
+    'collected_month', (select coalesce(sum(pa.amount_allocated),0)
+      from payment p
+      join payment_allocation pa on pa.payment_id = p.id
+      join invoice inv on inv.id = pa.invoice_id
+      where p.payment_date >= date_trunc('month', today)::date
+        and (p_customer is null or inv.customer_id = p_customer)),
+    'draft_quotations', (select count(*) from quotation
+      where status = 'draft' and (p_customer is null or customer_id = p_customer)),
+    'awaiting_delivery', (select count(distinct so.id) from sales_order so
+      join sales_order_line l on l.sales_order_id = so.id
+      where so.status not in ('cancelled','closed') and l.quantity_ordered > l.quantity_delivered
+        and (p_customer is null or so.customer_id = p_customer)),
+    'awaiting_invoice', (select count(distinct so.id) from sales_order so
+      join sales_order_line l on l.sales_order_id = so.id
+      where so.status not in ('cancelled','closed') and l.quantity_delivered > l.quantity_invoiced
+        and (p_customer is null or so.customer_id = p_customer)),
+    'open_pos', (select count(*) from purchase_order where status = 'confirmed'),
+    'low_stock', (select count(*) from (
+        select p.reorder_point,
+          coalesce((select sum(sm.quantity) from stock_move sm join location dl on dl.id=sm.dest_location_id where sm.product_id=p.id and dl.kind='stock'),0)
+          - coalesce((select sum(sm.quantity) from stock_move sm join location sl on sl.id=sm.source_location_id where sm.product_id=p.id and sl.kind='stock'),0) as oh
+        from product p where p.is_stockable and p.is_active
+      ) s where s.reorder_point is not null and s.oh <= s.reorder_point),
+    'overdue_list', (select coalesce(jsonb_agg(row_to_json(x)),'[]'::jsonb) from (
+        select i.id, i.number, c.name as customer, i.due_date, i.balance
+        from invoice i join customer c on c.id = i.customer_id
+        where i.balance > 0.001 and i.status not in ('cancelled','draft') and i.due_date < today
+          and (p_customer is null or i.customer_id = p_customer)
+        order by i.due_date asc limit 8) x),
+    'low_stock_list', (select coalesce(jsonb_agg(row_to_json(z)),'[]'::jsonb) from (
+        select y.sku, y.name, y.uom, y.reorder_point, y.on_hand from (
+          select p.sku, p.name, u.code as uom, p.reorder_point,
+            coalesce((select sum(sm.quantity) from stock_move sm join location dl on dl.id=sm.dest_location_id where sm.product_id=p.id and dl.kind='stock'),0)
+            - coalesce((select sum(sm.quantity) from stock_move sm join location sl on sl.id=sm.source_location_id where sm.product_id=p.id and sl.kind='stock'),0) as on_hand
+          from product p
+          left join unit_of_measure u on u.id = p.uom_id
+          where p.is_stockable and p.is_active
+        ) y where y.reorder_point is not null and y.on_hand <= y.reorder_point
+        order by y.on_hand asc limit 8) z)
+  ) into result;
+  return result;
+end $fn$;
+
+revoke execute on function public.dashboard_operational(uuid) from public, anon;
+grant  execute on function public.dashboard_operational(uuid) to authenticated;
+
+-- ## SOURCE: db/migrations/0058_customer_last_price_uom.sql
+-- 0058 · Multi-UoM: customer_last_price returns the unit + factor of the last
+-- line, so the "last price to customer" comparison can be done PER BASE UNIT
+-- (a BOX price and a PCS price were being compared directly before). Only the
+-- returned JSON changes vs 0042 (adds `factor` + `uom`); the query is otherwise
+-- identical.
+create or replace function public.customer_last_price(p_customer uuid, p_product uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare r jsonb;
+begin
+  if not (public.has_permission('invoice.view') or public.has_permission('sales.quotation.view')) then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+
+  select jsonb_build_object(
+    'price', il.unit_price,
+    'factor', coalesce(il.uom_factor, 1),
+    'uom', u.code,
+    'date', i.invoice_date)
+  into r
+  from invoice_line il
+  join invoice i on i.id = il.invoice_id
+  left join unit_of_measure u on u.id = il.uom_id
+  where i.customer_id = p_customer
+    and il.product_id = p_product
+    and i.status not in ('cancelled','draft')
+  order by i.invoice_date desc, i.created_at desc
+  limit 1;
+
+  return r;
+end $$;
+
+revoke execute on function public.customer_last_price(uuid, uuid) from public, anon;
+grant execute on function public.customer_last_price(uuid, uuid) to authenticated;

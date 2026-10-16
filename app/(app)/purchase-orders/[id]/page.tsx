@@ -5,7 +5,9 @@ import { P } from "@/lib/rbac/permissions";
 import { formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
+import { PdfButton } from "@/components/pdf-button";
 import { PurchaseOrderForm } from "../po-form";
+import { buildProductUnits } from "@/lib/product-units";
 import { PoActions } from "./po-actions";
 
 export default async function PurchaseOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,19 +15,23 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
   const perms = await getPermissions();
 
-  const [{ data: po }, { data: vendors }, { data: products }, { data: uoms }, { data: warehouses }, { data: taxes }] = await Promise.all([
+  const [{ data: po }, { data: vendors }, { data: products }, { data: uoms }, { data: warehouses }, { data: taxes }, { data: productUoms }] = await Promise.all([
     supabase.from("purchase_order")
-      .select("*, vendor:vendor(name), lines:purchase_order_line(product_id, description, quantity, uom_id, unit_price, discount_pct, tax_pct, sequence)")
+      .select("*, vendor:vendor(name), lines:purchase_order_line(product_id, description, quantity, uom_id, uom_factor, unit_price, discount_pct, tax_pct, sequence)")
       .eq("id", id).maybeSingle(),
     supabase.from("vendor").select("id, code, name").order("name"),
-    supabase.from("product").select("id, sku, name, cost_price, uom_id").order("name"),
+    supabase.from("product").select("id, sku, name, cost_price, uom_id, tax_id").order("name"),
     supabase.from("unit_of_measure").select("id, code").order("code"),
     supabase.from("warehouse").select("id, code, name").order("code"),
     supabase.from("tax_rate").select("id, code, rate").order("code"),
+    supabase.from("product_uom").select("product_id, uom_id, factor, cost_price, sequence").eq("is_active", true).order("sequence"),
   ]);
 
   if (!po) return notFound();
-  type PoLine = { sequence: number; product_id: string | null; description: string; quantity: number; uom_id: string | null; unit_price: number; discount_pct: number; tax_pct: number };
+  const taxRateById = new Map((taxes ?? []).map((t) => [t.id, Number(t.rate)]));
+  const uomCode = new Map((uoms ?? []).map((u) => [u.id, u.code]));
+  const unitsByProduct = buildProductUnits((products ?? []) as { id: string; uom_id: string; cost_price: number }[], productUoms ?? [], uomCode, "cost_price");
+  type PoLine = { sequence: number; product_id: string | null; description: string; quantity: number; uom_id: string | null; uom_factor: number; unit_price: number; discount_pct: number; tax_pct: number };
   const lines = ((po.lines ?? []) as PoLine[]).slice().sort((a, b) => a.sequence - b.sequence);
   const vendorName = (po.vendor as { name?: string } | null)?.name ?? (po.vendor_name as string | null) ?? "—";
 
@@ -48,13 +54,16 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             {po.status === "cancelled" && "Cancelled."}
           </p>
         </div>
-        <PoActions
-          id={po.id}
-          status={po.status}
-          canConfirm={perms.has(P.procurement.poConfirm)}
-          canReceive={perms.has(P.procurement.poReceive)}
-          canCancel={perms.has(P.procurement.poCancel)}
-        />
+        <div className="flex flex-wrap gap-2">
+          <PdfButton url={`/purchase-orders/${po.id}/pdf`} filename={`${po.number}.pdf`} />
+          <PoActions
+            id={po.id}
+            status={po.status}
+            canConfirm={perms.has(P.procurement.poConfirm)}
+            canReceive={perms.has(P.procurement.poReceive)}
+            canCancel={perms.has(P.procurement.poCancel)}
+          />
+        </div>
       </div>
 
       <Card>
@@ -62,6 +71,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           <PurchaseOrderForm
             initial={{
               id: po.id,
+              number: po.number,
               vendor_id: po.vendor_id ?? "",
               order_date: po.order_date,
               expected_date: po.expected_date,
@@ -72,7 +82,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
               lines,
             }}
             vendors={(vendors ?? []).map((v) => ({ id: v.id, label: `${v.code} — ${v.name}` }))}
-            products={(products ?? []).map((p) => ({ id: p.id, label: `${p.sku} — ${p.name}`, extra: { cost_price: p.cost_price, uom_id: p.uom_id } }))}
+            products={(products ?? []).map((p) => ({ id: p.id, label: `${p.sku} — ${p.name}`, extra: { cost_price: p.cost_price, uom_id: p.uom_id, tax_rate: p.tax_id ? taxRateById.get(p.tax_id) ?? 0 : 0 }, uoms: unitsByProduct.get(p.id) ?? [] }))}
             uoms={(uoms ?? []).map((u) => ({ id: u.id, label: u.code }))}
             warehouses={(warehouses ?? []).map((w) => ({ id: w.id, label: `${w.code} — ${w.name}` }))}
             taxes={(taxes ?? []).map((t) => ({ id: t.id, label: `${t.code} (${Number(t.rate).toFixed(2)}%)` }))}

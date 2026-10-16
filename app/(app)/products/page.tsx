@@ -36,9 +36,14 @@ export default async function ProductsPage({
 
   const { data: categories } = await supabase.from("product_category").select("id, name").order("name");
 
+  // Only fetch per-unit cost for cost-permitted users (don't ship it otherwise).
+  const canCost = perms.has(P.inventory.productViewCost);
+  const unitsSel = canCost
+    ? "units:product_uom(sequence, sale_price, cost_price, uom:unit_of_measure(code))"
+    : "units:product_uom(sequence, sale_price, uom:unit_of_measure(code))";
   let query = supabase
     .from("product")
-    .select("id, sku, name, sale_price, cost_price, last_purchase_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name)")
+    .select(`id, sku, name, sale_price, cost_price, last_purchase_price, is_active, created_at, uom:unit_of_measure(code), category:product_category(name), ${unitsSel}`)
     .order(order.column, { ascending: order.ascending })
     .limit(200);
 
@@ -138,22 +143,65 @@ export default async function ProductsPage({
                     {(() => {
                       const lpp = (p as { last_purchase_price?: number | null }).last_purchase_price;
                       const cost = (p as { cost_price?: number | null }).cost_price;
-                      if (!perms.has(P.inventory.productViewCost) || lpp == null || cost == null) return null;
-                      if (Math.abs(Number(lpp) - Number(cost)) <= 0.005) return null;
-                      const up = Number(lpp) > Number(cost);
+                      // Show a "Last buy" badge on any product that's been purchased;
+                      // turn it amber with an arrow only when the price differs from cost.
+                      if (!perms.has(P.inventory.productViewCost) || lpp == null) return null;
+                      const differs = cost != null && Math.abs(Number(lpp) - Number(cost)) > 0.005;
+                      const up = cost != null && Number(lpp) > Number(cost);
                       return (
-                        <Badge variant="warning" className="font-normal whitespace-nowrap" title={`Last purchased at ${formatMoney(Number(lpp))} vs master cost ${formatMoney(Number(cost))}`}>
-                          Last buy {formatMoney(Number(lpp))} {up ? "↑" : "↓"}
+                        <Badge
+                          variant={differs ? "warning" : "secondary"}
+                          className="font-normal whitespace-nowrap"
+                          title={
+                            differs
+                              ? `Last purchased at ${formatMoney(Number(lpp))} vs master cost ${formatMoney(Number(cost))}`
+                              : `Last purchased at ${formatMoney(Number(lpp))}`
+                          }
+                        >
+                          Last buy {formatMoney(Number(lpp))}{differs ? (up ? " ↑" : " ↓") : ""}
                         </Badge>
                       );
                     })()}
                   </div>
                 </TableCell>
                 <TableCell>{(p.category as { name?: string } | null)?.name ?? "—"}</TableCell>
-                <TableCell>{(p.uom as { code?: string } | null)?.code ?? "—"}</TableCell>
-                <TableCell className="text-right">{formatMoney(p.sale_price)}</TableCell>
+                <TableCell>
+                  {(() => {
+                    const base = (p.uom as { code?: string } | null)?.code;
+                    const extras = ((p as { units?: Array<{ sequence: number; uom?: { code?: string } | null }> }).units ?? [])
+                      .slice().sort((a, b) => a.sequence - b.sequence)
+                      .map((u) => u.uom?.code).filter(Boolean);
+                    const all = [base, ...extras].filter(Boolean) as string[];
+                    return all.length ? all.join(" · ") : "—";
+                  })()}
+                </TableCell>
+                <TableCell className="text-right">
+                  {formatMoney(p.sale_price)}
+                  {(() => {
+                    const extras = ((p as { units?: Array<{ sequence: number; sale_price: number; uom?: { code?: string } | null }> }).units ?? [])
+                      .slice().sort((a, b) => a.sequence - b.sequence);
+                    if (!extras.length) return null;
+                    return (
+                      <div className="text-[11px] text-muted-foreground font-normal">
+                        {extras.map((u) => `${u.uom?.code ?? ""} ${formatMoney(u.sale_price)}`).join(" · ")}
+                      </div>
+                    );
+                  })()}
+                </TableCell>
                 {perms.has(P.inventory.productViewCost) && (
-                  <TableCell className="text-right text-muted-foreground">{formatMoney((p as { cost_price?: number }).cost_price)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {formatMoney((p as { cost_price?: number }).cost_price)}
+                    {(() => {
+                      const extras = ((p as { units?: Array<{ sequence: number; cost_price?: number; uom?: { code?: string } | null }> }).units ?? [])
+                        .slice().sort((a, b) => a.sequence - b.sequence);
+                      if (!extras.length) return null;
+                      return (
+                        <div className="text-[11px] font-normal">
+                          {extras.map((u) => `${u.uom?.code ?? ""} ${formatMoney(u.cost_price ?? 0)}`).join(" · ")}
+                        </div>
+                      );
+                    })()}
+                  </TableCell>
                 )}
                 <TableCell>
                   {p.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}

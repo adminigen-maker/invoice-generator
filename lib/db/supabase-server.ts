@@ -1,3 +1,4 @@
+import "server-only"; // RLS-bound user client — must never be bundled into client code
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { supabaseUrl, supabaseAnonKey } from "./config";

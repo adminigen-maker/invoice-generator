@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 type Reports = {
   totals: { invoice_count: number; revenue: number; collected: number; outstanding: number };
   ar_aging: { not_due: number; d1_30: number; d31_60: number; d60_plus: number };
-  top_products: { name: string; revenue: number; qty: number }[];
+  top_products: { name: string; revenue: number; qty: number; uom?: string | null }[];
   top_customers: { name: string; revenue: number; invoices: number }[];
   revenue_by_month: { month: string; revenue: number }[];
 };
@@ -35,7 +35,7 @@ type Valuation = {
 
 type Profit = {
   totals: { revenue: number; cost: number; profit: number };
-  by_product: { name: string; qty: number; revenue: number; cost: number; profit: number }[];
+  by_product: { name: string; qty: number; revenue: number; cost: number; profit: number; uom?: string | null }[];
   by_customer: { name: string; revenue: number; cost: number; profit: number }[];
 };
 
@@ -43,8 +43,10 @@ const marginPct = (revenue: number, profit: number) => (Number(revenue) ? (Numbe
 
 function toCsv(r: Reports, vat: Vat | null, profit: Profit | null, valuation: Valuation | null, from?: string, to?: string): string {
   const esc = (v: unknown) => {
-    const s = String(v ?? "");
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    let s = String(v ?? "");
+    // Neutralize spreadsheet formula injection (leading = + - @ / control char).
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines: string[] = [];
   lines.push(`Invoice UAE — Report`);
@@ -54,13 +56,13 @@ function toCsv(r: Reports, vat: Vat | null, profit: Profit | null, valuation: Va
     lines.push("Profitability,Revenue (net),COGS,Gross profit");
     lines.push(`Totals,${profit.totals.revenue},${profit.totals.cost},${profit.totals.profit}`);
     lines.push("");
-    lines.push("Profit by product,Qty,Revenue,Cost,Profit");
-    profit.by_product.forEach((p) => lines.push(`${esc(p.name)},${p.qty},${p.revenue},${p.cost},${p.profit}`));
+    lines.push("Profit by product,Unit,Qty,Revenue,Cost,Profit");
+    profit.by_product.forEach((p) => lines.push(`${esc(p.name)},${esc(p.uom ?? "")},${p.qty},${p.revenue},${p.cost},${p.profit}`));
     lines.push("");
   }
   if (valuation) {
-    lines.push("Stock valuation,On hand,Cost,Value");
-    valuation.items.forEach((v) => lines.push(`${esc(v.name)},${v.on_hand},${v.cost},${v.value}`));
+    lines.push("Stock valuation,Unit,On hand,Cost,Value");
+    valuation.items.forEach((v) => lines.push(`${esc(v.name)},${esc(v.uom)},${v.on_hand},${v.cost},${v.value}`));
     lines.push(`Total stock value,,,${valuation.total_value}`);
     lines.push("");
   }
@@ -90,8 +92,8 @@ function toCsv(r: Reports, vat: Vat | null, profit: Profit | null, valuation: Va
   lines.push("Top customers,Invoices,Revenue");
   r.top_customers.forEach((c) => lines.push(`${esc(c.name)},${c.invoices},${c.revenue}`));
   lines.push("");
-  lines.push("Top products,Qty,Revenue");
-  r.top_products.forEach((p) => lines.push(`${esc(p.name)},${p.qty},${p.revenue}`));
+  lines.push("Top products,Unit,Qty,Revenue");
+  r.top_products.forEach((p) => lines.push(`${esc(p.name)},${esc(p.uom ?? "")},${p.qty},${p.revenue}`));
   lines.push("");
   lines.push("Month,Revenue");
   r.revenue_by_month.forEach((m) => lines.push(`${m.month},${m.revenue}`));
@@ -323,12 +325,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <div>
             <div className="text-sm font-medium mb-2">By product</div>
             <Table>
-              <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Profit</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Qty</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Profit</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
               <TableBody>
-                {profit.by_product.length === 0 && (<TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>)}
+                {profit.by_product.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-6">No sales in this period.</TableCell></TableRow>)}
                 {profit.by_product.map((p, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{Number(p.qty)}{p.uom ? ` ${p.uom}` : ""}</TableCell>
                     <TableCell className="text-right font-mono">{formatMoney(p.revenue)}</TableCell>
                     <TableCell className={`text-right font-mono ${Number(p.profit) < 0 ? "text-destructive" : ""}`}>{formatMoney(p.profit)}</TableCell>
                     <TableCell className="text-right font-mono">{marginPct(p.revenue, p.profit).toFixed(1)}%</TableCell>

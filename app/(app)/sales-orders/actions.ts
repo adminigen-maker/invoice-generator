@@ -64,13 +64,14 @@ export async function createDeliveryNoteFromSO(salesOrderId: string): Promise<{ 
   if (error) return { ok: false, error: error.message };
 
   const rows = outstanding.map((l: {
-    id: string; product_id: string | null; uom_id: string | null;
+    id: string; product_id: string | null; uom_id: string | null; uom_factor: number | null;
     quantity_ordered: number; quantity_delivered: number;
   }) => ({
     delivery_note_id: dn.id,
     sales_order_line_id: l.id,
     product_id: l.product_id,
     uom_id: l.uom_id,
+    uom_factor: Number(l.uom_factor ?? 1),
     quantity: Number(l.quantity_ordered) - Number(l.quantity_delivered),
   }));
   await supabase.from("delivery_note_line").insert(rows);
@@ -110,7 +111,7 @@ export async function createDeliveryAndInvoiceFromSO(
       return { ok: false, error: "A delivery note and invoice already exist for this order." };
     }
 
-    type SoLine = { id: string; product_id: string | null; uom_id: string | null; description: string; quantity_ordered: number; quantity_delivered: number; unit_price: number; discount_pct: number; tax_id: string | null };
+    type SoLine = { id: string; product_id: string | null; uom_id: string | null; uom_factor: number | null; description: string; quantity_ordered: number; quantity_delivered: number; unit_price: number; discount_pct: number; tax_id: string | null };
     const outstanding = ((so.lines ?? []) as SoLine[])
       .map((l) => ({ l, qty: Number(l.quantity_ordered) - Number(l.quantity_delivered) }))
       .filter((x) => x.qty > 0);
@@ -130,7 +131,7 @@ export async function createDeliveryAndInvoiceFromSO(
       .select("id").single();
     if (dnErr) return { ok: false, error: dnErr.message };
     const { data: dnLines, error: dnlErr } = await supabase.from("delivery_note_line")
-      .insert(outstanding.map(({ l, qty }) => ({ delivery_note_id: dn.id, sales_order_line_id: l.id, product_id: l.product_id, uom_id: l.uom_id, quantity: qty })))
+      .insert(outstanding.map(({ l, qty }) => ({ delivery_note_id: dn.id, sales_order_line_id: l.id, product_id: l.product_id, uom_id: l.uom_id, uom_factor: Number(l.uom_factor ?? 1), quantity: qty })))
       .select("id, sales_order_line_id");
     if (dnlErr) return { ok: false, error: dnlErr.message };
     const dnLineBySoLine = new Map((dnLines ?? []).map((d: { id: string; sales_order_line_id: string }) => [d.sales_order_line_id, d.id]));
@@ -164,7 +165,7 @@ export async function createDeliveryAndInvoiceFromSO(
       subtotal += t.line_subtotal; discountTotal += t.line_discount; taxTotal += t.line_tax; total += t.line_total;
       return {
         invoice_id: inv.id, sales_order_line_id: l.id, delivery_note_line_id: dnLineBySoLine.get(l.id) ?? null,
-        sequence: i, product_id: l.product_id, description: l.description, quantity: qty, uom_id: l.uom_id,
+        sequence: i, product_id: l.product_id, description: l.description, quantity: qty, uom_id: l.uom_id, uom_factor: Number(l.uom_factor ?? 1),
         unit_price: l.unit_price, discount_pct: l.discount_pct, tax_id: l.tax_id,
         line_subtotal: t.line_subtotal, line_discount: t.line_discount, line_tax: t.line_tax, line_total: t.line_total,
       };
@@ -204,7 +205,7 @@ export async function createInvoiceFromSO(salesOrderId: string): Promise<{ ok: t
   }) => {
     const remaining = Number(l.quantity_delivered) - Number(l.quantity_invoiced);
     return remaining > 0 ? { l, remaining } : null;
-  }).filter(Boolean) as Array<{ l: { id: string; sequence: number; product_id: string | null; description: string; uom_id: string | null; unit_price: number; discount_pct: number; tax_id: string | null }; remaining: number }>;
+  }).filter(Boolean) as Array<{ l: { id: string; sequence: number; product_id: string | null; description: string; uom_id: string | null; uom_factor: number | null; unit_price: number; discount_pct: number; tax_id: string | null }; remaining: number }>;
 
   if (!invoiceable.length) return { ok: false, error: "Nothing delivered yet to invoice" };
 
@@ -266,6 +267,7 @@ export async function createInvoiceFromSO(salesOrderId: string): Promise<{ ok: t
       description: l.description,
       quantity: remaining,
       uom_id: l.uom_id,
+      uom_factor: Number(l.uom_factor ?? 1),
       unit_price: l.unit_price,
       discount_pct: l.discount_pct,
       tax_id: l.tax_id,
