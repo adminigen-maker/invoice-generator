@@ -8,8 +8,10 @@ import { createClient } from "@/lib/db/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DEMO_COOKIE_NAME, isDemoMode, isLocalHost } from "@/lib/demo-mode";
 
 const REMEMBER_KEY = "invoice-uae:remember-email";
+const DEMO_MODE = isDemoMode();
 
 export function LoginForm() {
   const router = useRouter();
@@ -37,13 +39,32 @@ export function LoginForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setLoading(false);
-      toast.error(error.message);
-      return;
+    // The literal NODE_ENV test lets a production build delete this whole block,
+    // demo credentials included, from the browser bundle.
+    if (process.env.NODE_ENV !== "production" && DEMO_MODE) {
+      const DEMO_EMAIL = "admin@demo.local";
+      const DEMO_PASSWORD = "Demo@12345";
+      if (!isLocalHost(window.location.hostname)) {
+        setLoading(false);
+        toast.error("Demo mode only works on this PC: open the app at http://localhost:3000");
+        return;
+      }
+      if (email !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
+        setLoading(false);
+        toast.error(`Demo mode: use ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
+        return;
+      }
+      document.cookie = DEMO_COOKIE_NAME + "=1; path=/; max-age=" + 60 * 60 * 24 * 30;
+    } else {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        setLoading(false);
+        toast.error(error.message);
+        return;
+      }
     }
 
     try {
