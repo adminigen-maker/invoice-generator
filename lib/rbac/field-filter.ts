@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/db/supabase-server";
 import { cache } from "react";
 import { getPermissions } from "./can";
+import { isDemoMode } from "@/lib/demo-mode";
+
+const DEMO_MODE = isDemoMode();
 
 /**
  * Layer 3 of RBAC — field-level masking.
@@ -13,6 +16,7 @@ import { getPermissions } from "./can";
  *   return maskFields("product", rows.data);
  */
 const getFieldRules = cache(async (): Promise<Map<string, Array<{ field: string; perm: string }>>> => {
+  if (DEMO_MODE) return new Map();
   const supabase = await createClient();
   const { data } = await supabase.from("field_permission").select("*");
   const map = new Map<string, Array<{ field: string; perm: string }>>();

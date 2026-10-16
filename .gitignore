@@ -10,3 +10,8 @@ out
 .vercel
 .turbo
 .supabase
+
+# Claude Code local files (never publish)
+.claude/
+CLAUDE.md
+KNOWLEDGE.md

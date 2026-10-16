@@ -1,5 +1,13 @@
 import { createClient } from "@/lib/db/supabase-server";
 import { cache } from "react";
+import { P } from "./permissions";
+import { isDemoMode } from "@/lib/demo-mode";
+
+const DEMO_MODE = isDemoMode();
+
+const ALL_PERMISSIONS = new Set(
+  Object.values(P).flatMap((group) => Object.values(group))
+);
 
 /**
  * Layer 1 of RBAC — module/action check.
@@ -12,6 +20,7 @@ import { cache } from "react";
  * Result is per-request cached to avoid repeated round-trips.
  */
 export const getPermissions = cache(async (): Promise<Set<string>> => {
+  if (DEMO_MODE) return ALL_PERMISSIONS;
   const supabase = await createClient();
   // Resolve the full effective permission set in ONE round trip via the
   // my_permission_codes() RPC (role grants ∪ positive overrides − negative
